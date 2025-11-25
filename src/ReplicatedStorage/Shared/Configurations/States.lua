@@ -12,6 +12,7 @@ local States = {
 	DOWNED = "Downed",
 	KILLED = "Killed",
 	SPRINTING = "Sprinting",
+	JOGGING = "Jogging",
 	JUMPING = "Jumping",
 	FALLING = "Falling",
 	IN_CUTSCENE = "InCutscene",
@@ -19,6 +20,13 @@ local States = {
 	RIPOSTE_WINDOW = "RiposteWindow",
 	DODGING = "Dodging",
 	IFRAME = "Iframe",
+	MODE_ACTIVE = "ModeActive",
+	STAGGERED = "Staggered",
+	BLINDED = "Blinded",
+	BLEEDING = "Bleeding",
+	SLUGGISH = "Sluggish",
+	FATIGUED = "Fatigued",
+	DIZZY = "Dizzy",
 }
 
 local Events = {
@@ -30,9 +38,19 @@ local Events = {
 	PARRY_SUCCESS = "ParrySuccess",
 	PARRY_FAILED = "ParryFailed",
 	BLOCK_SUCCESS = "BlockSuccess",
+	PERFECT_BLOCK = "PerfectBlock",
 	POSTURE_BREAK = "PostureBreak",
 	RIPOSTE_STARTED = "RiposteStarted",
+	SPRINT_STARTED = "SprintStarted",
+	SPRINT_STOPPED = "SprintStopped",
+	JOG_STARTED = "JogStarted",
+	JOG_STOPPED = "JogStopped",
 	DODGE_STARTED = "DodgeStarted",
+	SKILL_USED = "SkillUsed",
+	MODE_ACTIVATED = "ModeActivated",
+	MODE_DEACTIVATED = "ModeDeactivated",
+	STAMINA_DEPLETED = "StaminaDepleted",
+	HUNGER_CRITICAL = "HungerCritical",
 }
 
 return {

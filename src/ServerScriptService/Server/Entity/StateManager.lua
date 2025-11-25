@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Maid = require(Shared.General.Maid)
+local Formulas = require(Shared.General.Formulas)
 
 export type StateValue = boolean | number | string
 export type EventData = {[string]: any}
@@ -21,9 +22,12 @@ export type StateManager = typeof(setmetatable({} :: {
 	Maid: any,
 }, StateManager))
 
-function StateManager.new(Character: Model): StateManager
+function StateManager.new(Character: Model, DataTable: any?): StateManager
+	local StatsData = if DataTable then DataTable.Stats else nil
+
 	local self = setmetatable({
 		Character = Character :: Model,
+		StatsData = StatsData :: any?,
 		States = {} :: {[string]: StateValue},
 		StateListeners = {} :: {[string]: {StateCallback}},
 		EventListeners = {} :: {[string]: {EventCallback}},
@@ -33,14 +37,23 @@ function StateManager.new(Character: Model): StateManager
 	return self
 end
 
-function StateManager:SetState(StateName: string, Value: StateValue)
+function StateManager:SetState(StateName: string, Value: StateValue, Default: boolean?)
 	local OldValue = self.States[StateName]
 
 	if OldValue == Value then
 		return
 	end
 
+	if typeof(Value) == "number" then
+		Value = Formulas.Round(Value, 3)
+	end
+
 	self.States[StateName] = Value
+
+	if self.StatsData and self.StatsData[StateName] and not Default then
+		self.StatsData[StateName] = Value
+	end
+
 	self.Character:SetAttribute(StateName, Value)
 
 	if self.StateListeners[StateName] then

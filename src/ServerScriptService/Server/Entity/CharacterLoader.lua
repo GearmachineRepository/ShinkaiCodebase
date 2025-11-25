@@ -79,7 +79,7 @@ function CharacterLoader.SpawnCharacter(Player: Player, Data)
 			return
 		end
 
-		local Controller = CharacterController.new(Character, true)
+		local Controller = CharacterController.new(Character, true, Data)
 
 		local Passives = PassiveRegistry.GetAll(Data.Passives)
 		for _, Passive in Passives do

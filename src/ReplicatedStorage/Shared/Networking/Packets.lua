@@ -26,5 +26,11 @@ return {
 	EventFired = Packet("EventFired", Packet.Instance, Packet.String, Packet.Any),
 
 	-- Footsteps
-	Footplanted = Packet("Footplanted", Packet.String, Packet.Vector3F32, Packet.NumberF32)
+	Footplanted = Packet("Footplanted", Packet.String, Packet.Vector3F32, Packet.NumberF32),
+
+	-- Movement
+	MovementStateChanged = Packet("MovementStateChanged", Packet.String),
+
+	-- Food
+	ConsumeFood = Packet("ConsumeFood", Packet.NumberF32, Packet.Any),
 }

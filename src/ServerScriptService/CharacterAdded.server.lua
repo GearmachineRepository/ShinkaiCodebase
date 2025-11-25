@@ -5,9 +5,13 @@ local Server = script.Parent:WaitForChild("Server")
 local CharacterLoader = require(Server.Entity.CharacterLoader)
 local PlayerDataTemplate = require(Server.PlayerDataTemplate)
 local CharacterController = require(Server.Entity.CharacterController)
+local DataModule = require(Server.DataModule)
 
 Players.PlayerAdded:Connect(function(Player: Player)
-	local PlayerData = table.clone(PlayerDataTemplate)
+	local PlayerData = DataModule.LoadData(Player)
+	if not PlayerData then
+		PlayerData = table.clone(PlayerDataTemplate)
+	end
 
 	CharacterLoader.LoadPlayer(Player, PlayerData)
 end)

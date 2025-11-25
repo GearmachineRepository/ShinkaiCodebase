@@ -2,6 +2,7 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Server = ServerScriptService:WaitForChild("Server")
@@ -12,8 +13,15 @@ local EquipmentController = require(Server.Entity.EquipmentController)
 local StateHandlers = require(Server.Entity.StateHandlers)
 local StatsModule = require(Shared.Configurations.Stats)
 local StatesModule = require(Shared.Configurations.States)
+local StaminaController = require(Server.Entity.StaminaController)
+local HungerController = require(Server.Entity.HungerController)
+local StutterStepHandler = require(Server.Entity.StutterStepHandler)
+local BodyFatigueController = require(Server.Entity.BodyFatigueController)
+local TrainingController = require(Server.Entity.TrainingController)
 local States = StatesModule.States
+local Events = StatesModule.Events
 local Defaults = StatsModule.Defaults
+local Stats = StatsModule.Stats
 
 local Maid = require(Shared.General.Maid)
 
@@ -33,6 +41,10 @@ export type ControllerType = typeof(setmetatable({} :: {
 	StateManager: StateManager.StateManager,
 	PassiveController: PassiveController.PassiveController,
 	EquipmentController: EquipmentController.EquipmentController,
+	StaminaController: any,
+	HungerController: any,
+	BodyFatigueController: any,
+	TrainingController: any,
 	StateMachine: any,
 	DamageModifiers: {{Priority: number, Modifier: DamageModifier}},
 	AttackModifiers: {{Priority: number, Modifier: DamageModifier}},
@@ -43,7 +55,7 @@ export type ControllerType = typeof(setmetatable({} :: {
 
 local Controllers: {[Model]: ControllerType} = {}
 
-function CharacterController.new(Character: Model, IsPlayer: boolean): ControllerType
+function CharacterController.new(Character: Model, IsPlayer: boolean, DataTable: any?): ControllerType
 	local self = setmetatable({
 		Character = Character,
 		Humanoid = Character:WaitForChild("Humanoid") :: Humanoid,
@@ -52,6 +64,10 @@ function CharacterController.new(Character: Model, IsPlayer: boolean): Controlle
 		StateManager = nil :: StateManager.StateManager?,
 		PassiveController = nil :: PassiveController.PassiveController?,
 		EquipmentController = nil :: EquipmentController.EquipmentController?,
+		StaminaController = nil :: any,
+		HungerController = nil :: any,
+		BodyFatigueController = nil :: any,
+		TrainingController = nil :: any,
 		StateMachine = nil :: any,
 		DamageModifiers = {},
 		AttackModifiers = {},
@@ -60,16 +76,25 @@ function CharacterController.new(Character: Model, IsPlayer: boolean): Controlle
 		SpeedModifiers = {},
 	}, CharacterController) :: ControllerType
 
-	self.StateManager = StateManager.new(Character)
+	self.StateManager = StateManager.new(Character, DataTable)
 	self.PassiveController = PassiveController.new(self)
 	self.EquipmentController = EquipmentController.new(self)
+	self.BodyFatigueController = BodyFatigueController.new(self, DataTable)
 
 	Character:SetAttribute("HasController", true)
 	Controllers[Character] = self
 
-	self:InitializeStates()
+	self:InitializeStates(DataTable)
 	StateHandlers.Setup(self)
 	self:SetupHumanoidStateTracking()
+
+	if IsPlayer then
+		self.StaminaController = StaminaController.new(self)
+		self.HungerController = HungerController.new(self)
+		self.TrainingController = TrainingController.new(self)
+
+		self:SetupMovementTracking()
+	end
 
 	self.Maid:GiveTask(self.Humanoid.Died:Connect(function()
 		self:Destroy()
@@ -78,9 +103,15 @@ function CharacterController.new(Character: Model, IsPlayer: boolean): Controlle
 	return self
 end
 
-function CharacterController:InitializeStates()
+function CharacterController:InitializeStates(PlayerData: any?)
 	for StateName, DefaultValue in Defaults do
-		self.StateManager:SetState(StateName, DefaultValue)
+		self.StateManager:SetState(StateName, DefaultValue, true)
+	end
+
+	if PlayerData and PlayerData.Stats then
+		for StateName, SavedValue in PlayerData.Stats do
+			self.StateManager:SetState(StateName, SavedValue)
+		end
 	end
 
 	for _, StateName in pairs(States) do
@@ -102,11 +133,9 @@ function CharacterController:SetupHumanoidStateTracking()
 			self.PostureController:Update(DeltaTime)
 		end
 
-		local IsMoving = self.Character.PrimaryPart.Velocity.Magnitude > 1
-		local IsOnGround = Humanoid:GetState() ~= Enum.HumanoidStateType.Freefall
-		local IsSprinting = IsMoving and IsOnGround and Humanoid.WalkSpeed > 16
-
-		self.StateManager:SetState(States.SPRINTING, IsSprinting)
+		if self.TrainingController then
+			self.TrainingController:ProcessTraining(DeltaTime)
+		end
 	end))
 
 	local IsInAir = false
@@ -330,12 +359,116 @@ function CharacterController:GetDebugInfo(): {[string]: any}
 	}
 end
 
+function CharacterController:SetupMovementTracking()
+	if not self.IsPlayer or not self.StaminaController then
+		return
+	end
+
+	local Player = Players:GetPlayerFromCharacter(self.Character)
+
+	self.Maid:GiveTask(self.Character:GetAttributeChangedSignal("MovementMode"):Connect(function()
+		local CurrentMode = self.Character:GetAttribute("MovementMode")
+
+		self.Maid:Set("MovementTraining", nil)
+
+		if CurrentMode == "run" then
+			self.StateManager:SetState(States.SPRINTING, true)
+			self.StateManager:SetState(States.JOGGING, false)
+			self.StateManager:FireEvent(Events.SPRINT_STARTED, {})
+
+			local SprintConnection = RunService.Heartbeat:Connect(function(DeltaTime)
+				local IsMoving = self.Character.PrimaryPart.Velocity.Magnitude > 1
+
+				if IsMoving and Player then
+					local StaminaMultiplier = StutterStepHandler.GetStaminaMultiplier(Player)
+					local AdjustedDelta = DeltaTime * StaminaMultiplier
+
+					local Success = self.StaminaController:HandleSprint(AdjustedDelta)
+
+					if not Success then
+						self.Character:SetAttribute("MovementMode", "walk")
+						self.StateManager:SetState(States.SPRINTING, false)
+						self.StateManager:FireEvent(Events.SPRINT_STOPPED, {})
+						self.StateManager:FireEvent(Events.STAMINA_DEPLETED, {})
+					else
+						if self.TrainingController and self.TrainingController:CanTrain() then
+							self.TrainingController:GrantStatExp(Stats.RUN_SPEED, AdjustedDelta * 0.5)
+						end
+					end
+				end
+			end)
+
+			self.Maid:Set("MovementTraining", SprintConnection)
+
+		elseif CurrentMode == "jog" then
+			self.StateManager:SetState(States.JOGGING, true)
+			self.StateManager:SetState(States.SPRINTING, false)
+			self.StateManager:FireEvent(Events.JOG_STARTED, {})
+
+			local JogConnection = RunService.Heartbeat:Connect(function(DeltaTime)
+				local IsMoving = self.Character.PrimaryPart.Velocity.Magnitude > 1
+
+				if IsMoving and Player then
+					local StaminaMultiplier = StutterStepHandler.GetStaminaMultiplier(Player)
+					local AdjustedDelta = DeltaTime * StaminaMultiplier
+
+					local Success = self.StaminaController:HandleJog(AdjustedDelta)
+
+					if not Success then
+						self.Character:SetAttribute("MovementMode", "walk")
+						self.StateManager:SetState(States.JOGGING, false)
+						self.StateManager:FireEvent(Events.JOG_STOPPED, {})
+						self.StateManager:FireEvent(Events.STAMINA_DEPLETED, {})
+					else
+						if self.TrainingController and self.TrainingController:CanTrain() then
+							self.TrainingController:GrantStatExp(Stats.STAMINA, AdjustedDelta * 0.3)
+						end
+					end
+				end
+			end)
+
+			self.Maid:Set("MovementTraining", JogConnection)
+
+		else
+			local WasSprinting = self.StateManager:GetState(States.SPRINTING)
+			local WasJogging = self.StateManager:GetState(States.JOGGING)
+
+			if WasSprinting then
+				self.StateManager:FireEvent(Events.SPRINT_STOPPED, {})
+			end
+
+			if WasJogging then
+				self.StateManager:FireEvent(Events.JOG_STOPPED, {})
+			end
+
+			self.StateManager:SetState(States.SPRINTING, false)
+			self.StateManager:SetState(States.JOGGING, false)
+		end
+	end))
+end
+
 function CharacterController:Destroy()
 	self.StateManager:Destroy()
 	self.PassiveController:Destroy()
 
 	if self.CombatController then
 		self.CombatController:Destroy()
+	end
+
+	if self.StaminaController then
+		self.StaminaController:Destroy()
+	end
+
+	if self.HungerController then
+		self.HungerController:Destroy()
+	end
+
+	if self.BodyFatigueController then
+		self.BodyFatigueController:Destroy()
+	end
+
+	if self.TrainingController then
+		self.TrainingController:Destroy()
 	end
 
 	self.Maid:DoCleaning()
