@@ -4,15 +4,9 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local StatsModule = require(Shared.Configurations.Stats)
+local StaminaConfig = require(Shared.Configurations.StaminaConfig)
 local Stats = StatsModule.Stats
-
-local SPRINT_STAMINA_COST_PER_SECOND = 8
-local JOG_STAMINA_COST_PER_SECOND = 3
-local STAMINA_REGEN_RATE = 5
-local STAMINA_REGEN_DELAY = 0.25
-local DRAINED_THRESHOLD = 45
-local EXHAUSTED_REGEN_MULTIPLIER = 0.5
-local EXHAUSTED_REMOVAL_THRESHOLD = 15
+local Defaults = StatsModule.Defaults
 
 export type StaminaController = {
 	Controller: any,
@@ -61,7 +55,7 @@ function StaminaController:StartRegen()
 		local StateManager = self.Controller.StateManager
 		local Character = self.Controller.Character
 
-		if CurrentTime - self.LastStaminaUse < STAMINA_REGEN_DELAY then
+		if CurrentTime - self.LastStaminaUse < StaminaConfig.STAMINA_REGEN_DELAY then
 			return
 		end
 
@@ -73,9 +67,12 @@ function StaminaController:StartRegen()
 			return
 		end
 
-		local RegenRate = STAMINA_REGEN_RATE
+		local BaseRegen = StaminaConfig.STAMINA_REGEN_RATE
+		local RegenMultiplier = MaxStamina / Defaults[Stats.MAX_STAMINA]
+		local RegenRate = BaseRegen * RegenMultiplier
+
 		if self.IsExhausted then
-			RegenRate *= EXHAUSTED_REGEN_MULTIPLIER
+			RegenRate *= StaminaConfig.EXHAUSTED_REGEN_MULTIPLIER
 		end
 
 		local StaminaGain = RegenRate * DeltaTime
@@ -86,9 +83,9 @@ function StaminaController:StartRegen()
 			Character:SetAttribute(Stats.STAMINA, NewStamina)
 
 			local StaminaPercent = (NewStamina / MaxStamina) * 100
-			Character:SetAttribute("Drained", StaminaPercent <= DRAINED_THRESHOLD)
+			Character:SetAttribute("Drained", StaminaPercent <= StaminaConfig.DRAINED_THRESHOLD)
 
-			if self.IsExhausted and StaminaPercent >= EXHAUSTED_REMOVAL_THRESHOLD then
+			if self.IsExhausted and StaminaPercent >= StaminaConfig.EXHAUSTED_REMOVAL_THRESHOLD then
 				self.IsExhausted = false
 				Character:SetAttribute("Exhausted", false)
 			end
@@ -120,7 +117,7 @@ function StaminaController:ConsumeStamina(Amount: number): boolean
 			Character:SetAttribute(Stats.STAMINA, NewStamina)
 
 			local StaminaPercent = (NewStamina / MaxStamina) * 100
-			Character:SetAttribute("Drained", StaminaPercent <= DRAINED_THRESHOLD)
+			Character:SetAttribute("Drained", StaminaPercent <= StaminaConfig.DRAINED_THRESHOLD)
 		end
 
 		self.LastStaminaUse = tick()
@@ -167,7 +164,7 @@ function StaminaController:HandleSprint(DeltaTime: number): boolean
 		DrainMultiplier = self.BodyFatigueController:GetStaminaDrainMultiplier()
 	end
 
-	local StaminaCost = SPRINT_STAMINA_COST_PER_SECOND * DeltaTime * DrainMultiplier
+	local StaminaCost = StaminaConfig.SPRINT_STAMINA_COST_PER_SECOND * DeltaTime * DrainMultiplier
 	return self:ConsumeStamina(StaminaCost)
 end
 
@@ -181,7 +178,7 @@ function StaminaController:HandleJog(DeltaTime: number): boolean
 		DrainMultiplier = self.BodyFatigueController:GetStaminaDrainMultiplier()
 	end
 
-	local StaminaCost = JOG_STAMINA_COST_PER_SECOND * DeltaTime * DrainMultiplier
+	local StaminaCost = StaminaConfig.JOG_STAMINA_COST_PER_SECOND * DeltaTime * DrainMultiplier
 	return self:ConsumeStamina(StaminaCost)
 end
 
@@ -199,9 +196,9 @@ function StaminaController:RestoreStamina(Amount: number)
 		Character:SetAttribute(Stats.STAMINA, NewStamina)
 
 		local StaminaPercent = (NewStamina / MaxStamina) * 100
-		Character:SetAttribute("Drained", StaminaPercent <= DRAINED_THRESHOLD)
+		Character:SetAttribute("Drained", StaminaPercent <= StaminaConfig.DRAINED_THRESHOLD)
 
-		if self.IsExhausted and StaminaPercent >= EXHAUSTED_REMOVAL_THRESHOLD then
+		if self.IsExhausted and StaminaPercent >= StaminaConfig.EXHAUSTED_REMOVAL_THRESHOLD then
 			self.IsExhausted = false
 			Character:SetAttribute("Exhausted", false)
 		end

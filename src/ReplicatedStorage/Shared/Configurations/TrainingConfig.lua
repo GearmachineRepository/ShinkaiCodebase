@@ -5,21 +5,21 @@ local Stats = StatsModule.Stats
 local BASE_FATIGUE_PER_STAT_GAIN = 0.5
 
 return {
-    	Running = {
+	Running = {
 		StatName = Stats.RUN_SPEED,
-		BaseExpGain = 1.0,
-		FatigueGain = BASE_FATIGUE_PER_STAT_GAIN,
+		BaseExpGain = 0.045,
+		FatigueGain = BASE_FATIGUE_PER_STAT_GAIN * 0.7,
 		RequiredMovement = true,
 	},
 	Jogging = {
-		StatName = Stats.STAMINA,
-		BaseExpGain = 0.8,
+		StatName = Stats.MAX_STAMINA,
+		BaseExpGain = 15,
 		FatigueGain = BASE_FATIGUE_PER_STAT_GAIN * 0.8,
 		RequiredMovement = true,
 	},
 	WeightTraining = {
 		StatName = Stats.MUSCLE,
-		BaseExpGain = 1.2,
+		BaseExpGain = 0.25,
 		FatigueGain = BASE_FATIGUE_PER_STAT_GAIN * 1.5,
 		RequiredMovement = false,
 	},

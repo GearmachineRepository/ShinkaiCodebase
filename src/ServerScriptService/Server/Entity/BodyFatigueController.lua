@@ -1,14 +1,9 @@
 --!strict
-local RunService = game:GetService("RunService")
-
-local BODY_FATIGUE_MAX = 100
-local SOFT_CAP_PERCENT = 65
-local FORTITUDE_CAP_PERCENT = 85
-local NO_SWEAT_DECAY_DELAY = 5 * 60
-local BASE_DECAY_RATE = 2
-
-local HIGH_FATIGUE_STAMINA_DRAIN_MULTIPLIER = 1.4
-local HIGH_FATIGUE_GAIN_MULTIPLIER = 1.25
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local StatsModule = require(Shared.Configurations.Stats)
+local BodyFatigueConfig = require(Shared.Configurations.BodyFatigueConfig)
+local Stats = StatsModule.Stats
 
 export type BodyFatigueController = {
 	Controller: any,
@@ -17,6 +12,7 @@ export type BodyFatigueController = {
 	RestMultiplier: number,
 	HasFortitude: boolean,
 
+	Update: (self: BodyFatigueController, DeltaTime: number) -> (),
 	AddFatigueFromStatGain: (self: BodyFatigueController, BaseAmount: number) -> (),
 	SetRestMultiplier: (self: BodyFatigueController, Multiplier: number) -> (),
 	SetFortitude: (self: BodyFatigueController, HasFortitude: boolean) -> (),
@@ -31,10 +27,15 @@ export type BodyFatigueController = {
 local BodyFatigueController = {}
 BodyFatigueController.__index = BodyFatigueController
 
-function BodyFatigueController.new(CharacterController: any): BodyFatigueController
+function BodyFatigueController.new(CharacterController: any, DataTable: any?): BodyFatigueController
+	local SavedFatigue = 0
+	if DataTable and DataTable.Stats then
+		SavedFatigue = DataTable.Stats[Stats.BODY_FATIGUE] or 0
+	end
+
 	local self = setmetatable({
 		Controller = CharacterController,
-		CurrentFatigue = 0,
+		CurrentFatigue = SavedFatigue,
 		LastSweatTime = -math.huge,
 		RestMultiplier = 1,
 		HasFortitude = false,
@@ -42,15 +43,9 @@ function BodyFatigueController.new(CharacterController: any): BodyFatigueControl
 
 	local Character = CharacterController.Character
 	if Character then
-		Character:SetAttribute("BodyFatigue", 0)
+		Character:SetAttribute("BodyFatigue", SavedFatigue)
 		Character:SetAttribute("Sweating", false)
 	end
-
-	local UpdateConnection = RunService.Heartbeat:Connect(function(DeltaTime)
-		self:Update(DeltaTime)
-	end)
-
-	CharacterController.Maid:Set("BodyFatigueUpdate", UpdateConnection)
 
 	return (self :: any) :: BodyFatigueController
 end
@@ -71,12 +66,14 @@ function BodyFatigueController:AddFatigueFromStatGain(BaseAmount: number)
 	local FatiguePercent = self:GetFatiguePercent()
 	local FinalAmount = BaseAmount
 
-	if FatiguePercent >= SOFT_CAP_PERCENT then
-		FinalAmount *= HIGH_FATIGUE_GAIN_MULTIPLIER
+	if FatiguePercent >= BodyFatigueConfig.SOFT_CAP_PERCENT then
+		FinalAmount *= BodyFatigueConfig.HIGH_FATIGUE_GAIN_MULTIPLIER
 	end
 
-	self.CurrentFatigue = math.clamp(self.CurrentFatigue + FinalAmount, 0, BODY_FATIGUE_MAX)
+	self.CurrentFatigue = math.clamp(self.CurrentFatigue + FinalAmount, 0, BodyFatigueConfig.BODY_FATIGUE_MAX)
 	Character:SetAttribute("BodyFatigue", self.CurrentFatigue)
+
+	self.Controller.StateManager:SetStat(Stats.BODY_FATIGUE, self.CurrentFatigue)
 end
 
 function BodyFatigueController:Update(DeltaTime: number)
@@ -88,11 +85,13 @@ function BodyFatigueController:Update(DeltaTime: number)
 	local Now = tick()
 	local TimeSinceSweat = Now - self.LastSweatTime
 
-	if TimeSinceSweat >= NO_SWEAT_DECAY_DELAY then
+	if TimeSinceSweat >= BodyFatigueConfig.NO_SWEAT_DECAY_DELAY then
 		if self.CurrentFatigue > 0 then
-			local DecayRate = BASE_DECAY_RATE * self.RestMultiplier
+			local DecayRate = BodyFatigueConfig.BASE_DECAY_RATE * self.RestMultiplier
 			self.CurrentFatigue = math.max(0, self.CurrentFatigue - DecayRate * DeltaTime)
 			Character:SetAttribute("BodyFatigue", self.CurrentFatigue)
+
+			self.Controller.StateManager:SetStat(Stats.BODY_FATIGUE, self.CurrentFatigue)
 		end
 
 		if Character:GetAttribute("Sweating") == true then
@@ -112,15 +111,15 @@ end
 function BodyFatigueController:GetStaminaDrainMultiplier(): number
 	local FatiguePercent = self:GetFatiguePercent()
 
-	if FatiguePercent >= SOFT_CAP_PERCENT then
-		return HIGH_FATIGUE_STAMINA_DRAIN_MULTIPLIER
+	if FatiguePercent >= BodyFatigueConfig.SOFT_CAP_PERCENT then
+		return BodyFatigueConfig.HIGH_FATIGUE_STAMINA_DRAIN_MULTIPLIER
 	end
 
 	return 1
 end
 
 function BodyFatigueController:IsOverSoftCap(): boolean
-	return self:GetFatiguePercent() >= SOFT_CAP_PERCENT
+	return self:GetFatiguePercent() >= BodyFatigueConfig.SOFT_CAP_PERCENT
 end
 
 function BodyFatigueController:CanGainStats(): boolean
@@ -130,18 +129,16 @@ end
 
 function BodyFatigueController:GetEffectiveCap(): number
 	if self.HasFortitude then
-		return FORTITUDE_CAP_PERCENT
+		return BodyFatigueConfig.FORTITUDE_CAP_PERCENT
 	end
-	return SOFT_CAP_PERCENT
+	return BodyFatigueConfig.SOFT_CAP_PERCENT
 end
 
 function BodyFatigueController:GetFatiguePercent(): number
-	return (self.CurrentFatigue / BODY_FATIGUE_MAX) * 100
+	return (self.CurrentFatigue / BodyFatigueConfig.BODY_FATIGUE_MAX) * 100
 end
 
 function BodyFatigueController:Destroy()
-	self.Controller.Maid:Set("BodyFatigueUpdate", nil)
-
 	for Key in pairs(self) do
 		self[Key] = nil
 	end

@@ -3,7 +3,8 @@ local Players = game:GetService("Players")
 
 local ADMINS = {
 	"Odawg566",
-	"SkiMag80"
+	"SkiMag80",
+	"lmCenti"
 }
 
 local AdminCommands = {}

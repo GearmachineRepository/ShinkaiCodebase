@@ -18,10 +18,10 @@ local HungerController = require(Server.Entity.HungerController)
 local StutterStepHandler = require(Server.Entity.StutterStepHandler)
 local BodyFatigueController = require(Server.Entity.BodyFatigueController)
 local TrainingController = require(Server.Entity.TrainingController)
+local TraingingConfigModule = require(Shared.Configurations.TrainingConfig)
 local States = StatesModule.States
 local Events = StatesModule.Events
 local Defaults = StatsModule.Defaults
-local Stats = StatsModule.Stats
 
 local Maid = require(Shared.General.Maid)
 
@@ -79,7 +79,6 @@ function CharacterController.new(Character: Model, IsPlayer: boolean, DataTable:
 	self.StateManager = StateManager.new(Character, DataTable)
 	self.PassiveController = PassiveController.new(self)
 	self.EquipmentController = EquipmentController.new(self)
-	self.BodyFatigueController = BodyFatigueController.new(self, DataTable)
 
 	Character:SetAttribute("HasController", true)
 	Controllers[Character] = self
@@ -89,9 +88,10 @@ function CharacterController.new(Character: Model, IsPlayer: boolean, DataTable:
 	self:SetupHumanoidStateTracking()
 
 	if IsPlayer then
+		self.BodyFatigueController = BodyFatigueController.new(self, DataTable)
 		self.StaminaController = StaminaController.new(self)
 		self.HungerController = HungerController.new(self)
-		self.TrainingController = TrainingController.new(self)
+		self.TrainingController = TrainingController.new(self, DataTable)
 
 		self:SetupMovementTracking()
 	end
@@ -125,16 +125,24 @@ function CharacterController:SetupHumanoidStateTracking()
 	local Humanoid = self.Humanoid
 
 	self.Maid:GiveTask(RunService.Heartbeat:Connect(function(DeltaTime)
+		if self.BodyFatigueController then
+			self.BodyFatigueController:Update(DeltaTime)
+		end
+
+		if self.HungerController then
+			self.HungerController:Update()
+		end
+
+		if self.TrainingController then
+			self.TrainingController:ProcessTraining(DeltaTime)
+		end
+
 		if self.CombatController then
 			self.CombatController:Update(DeltaTime)
 		end
 
 		if self.PostureController then
 			self.PostureController:Update(DeltaTime)
-		end
-
-		if self.TrainingController then
-			self.TrainingController:ProcessTraining(DeltaTime)
 		end
 	end))
 
@@ -391,8 +399,12 @@ function CharacterController:SetupMovementTracking()
 						self.StateManager:FireEvent(Events.SPRINT_STOPPED, {})
 						self.StateManager:FireEvent(Events.STAMINA_DEPLETED, {})
 					else
-						if self.TrainingController and self.TrainingController:CanTrain() then
-							self.TrainingController:GrantStatExp(Stats.RUN_SPEED, AdjustedDelta * 0.5)
+					if self.TrainingController and self.TrainingController:CanTrain() then
+							local Config = TraingingConfigModule.Running
+							if Config then
+								local Gain = Config.BaseExpGain * AdjustedDelta
+								self.TrainingController:GrantStatGain(Config.StatName, Gain, Config.FatigueGain)
+							end
 						end
 					end
 				end
@@ -421,7 +433,11 @@ function CharacterController:SetupMovementTracking()
 						self.StateManager:FireEvent(Events.STAMINA_DEPLETED, {})
 					else
 						if self.TrainingController and self.TrainingController:CanTrain() then
-							self.TrainingController:GrantStatExp(Stats.STAMINA, AdjustedDelta * 0.3)
+							local Config = TraingingConfigModule.Jogging
+							if Config then
+								local Gain = Config.BaseExpGain * AdjustedDelta
+								self.TrainingController:GrantStatGain(Config.StatName, Gain, Config.FatigueGain)
+							end
 						end
 					end
 				end

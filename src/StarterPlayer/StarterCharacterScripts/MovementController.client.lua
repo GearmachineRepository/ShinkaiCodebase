@@ -3,6 +3,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = Shared:WaitForChild("Configurations")
+local StatsModule = require(Config:WaitForChild("Stats"))
+local Stats = StatsModule.Stats
+local Defaults = StatsModule.Defaults
+
 local Player = Players.LocalPlayer
 local Character = script.Parent
 local Humanoid = Character:WaitForChild("Humanoid")
@@ -10,9 +16,9 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local Packets = require(ReplicatedStorage.Shared.Networking.Packets)
 
 local DOUBLE_TAP_TIME = 0.3
-local WALK_SPEED = 9
-local JOG_SPEED = 18
-local SPRINT_SPEED = 28
+local SPRINT_SPEED = Defaults[Stats.RUN_SPEED]
+local JOG_SPEED = SPRINT_SPEED / 1.75
+local WALK_SPEED = JOG_SPEED / 2
 
 local LastWPressTime = 0
 local IsInSprintMode = false

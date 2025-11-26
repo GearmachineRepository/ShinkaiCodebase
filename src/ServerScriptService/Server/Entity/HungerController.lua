@@ -1,28 +1,12 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local StatsModule = require(Shared.Configurations.Stats)
 local StatesModule = require(Shared.Configurations.States)
+local HungerConfig = require(Shared.Configurations.HungerConfig)
 
 local Stats = StatsModule.Stats
-
-local PASSIVE_HUNGER_DRAIN_RATE = 0.05
-local PASSIVE_HUNGER_DRAIN_INTERVAL = 1
-local STAMINA_TO_HUNGER_RATIO = 0.065
-
-local HUNGER_CRITICAL_THRESHOLD = 20
-local HUNGER_FULL_THRESHOLD = 73
-
-local MUSCLE_LOSS_RATE = 0.25
-local MUSCLE_LOSS_INTERVAL = 1.5
-
-local FAT_GAIN_RATE = 0.015
-local FAT_GAIN_INTERVAL = 0.75
-
-local FAT_LOSS_RATE = 0.05
-local FAT_LOSS_INTERVAL = 0.75
 
 export type HungerController = {
 	Controller: any,
@@ -31,11 +15,14 @@ export type HungerController = {
 	LastFatGain: number,
 	LastFatLoss: number,
 
+	Update: (self: HungerController) -> (),
 	Feed: (self: HungerController, Amount: number) -> (),
 	GetHungerPercent: (self: HungerController) -> number,
 	IsStarving: (self: HungerController) -> boolean,
 	IsFull: (self: HungerController) -> boolean,
 	GetStatGainMultiplier: (self: HungerController) -> number,
+	GetFatGainMultiplier: (self: HungerController) -> number,
+	GetFatLossMultiplier: (self: HungerController, HungerPercent: number) -> number,
 	ConsumeHungerForStamina: (self: HungerController, StaminaUsed: number) -> (),
 	Destroy: (self: HungerController) -> (),
 }
@@ -54,7 +41,7 @@ function HungerController.new(CharacterController: any): HungerController
 
 	local Character = CharacterController.Character
 
-	Character:SetAttribute("HungerThreshold", (100 - HUNGER_FULL_THRESHOLD) / 100)
+	Character:SetAttribute("HungerThreshold", (100 - HungerConfig.HUNGER_FULL_THRESHOLD) / 100)
 
 	if Character then
 		local MaxHunger = CharacterController.StateManager:GetStat(Stats.MAX_HUNGER)
@@ -62,84 +49,88 @@ function HungerController.new(CharacterController: any): HungerController
 		Character:SetAttribute(Stats.MAX_HUNGER, MaxHunger)
 	end
 
-	local HungerConnection = RunService.Heartbeat:Connect(function()
-		local CurrentTime = tick()
-		local StateManager = self.Controller.StateManager
-
-		if CurrentTime - self.LastHungerDrain >= PASSIVE_HUNGER_DRAIN_INTERVAL then
-			local CurrentHunger = StateManager:GetStat(Stats.HUNGER)
-			local NewHunger = math.max(0, CurrentHunger - PASSIVE_HUNGER_DRAIN_RATE)
-
-			StateManager:SetStat(Stats.HUNGER, NewHunger)
-
-			if Character then
-				Character:SetAttribute(Stats.HUNGER, NewHunger)
-			end
-
-			self.LastHungerDrain = CurrentTime
-		end
-
-		if self:IsStarving() and CurrentTime - self.LastMuscleLoss >= MUSCLE_LOSS_INTERVAL then
-			local CurrentMuscle = StateManager:GetStat(Stats.MUSCLE)
-
-			if CurrentMuscle > 0 then
-				local NewMuscle = math.max(0, CurrentMuscle - MUSCLE_LOSS_RATE)
-				StateManager:SetStat(Stats.MUSCLE, NewMuscle)
-				self.LastMuscleLoss = CurrentTime
-			end
-
-			StateManager:FireEvent(StatesModule.Events.HUNGER_CRITICAL, {})
-		end
-
-		if self:IsFull() and CurrentTime - self.LastFatGain >= FAT_GAIN_INTERVAL then
-			local CurrentFat = StateManager:GetStat(Stats.FAT) or 0
-			local Multiplier = self:GetFatGainMultiplier()
-			local NewFat = CurrentFat + FAT_GAIN_RATE * Multiplier
-
-			StateManager:SetStat(Stats.FAT, NewFat)
-			self.LastFatGain = CurrentTime
-		end
-
-		local HungerPercent = self:GetHungerPercent()
-		if HungerPercent < HUNGER_FULL_THRESHOLD and CurrentTime - self.LastFatLoss >= FAT_LOSS_INTERVAL then
-			local CurrentFat = StateManager:GetStat(Stats.FAT) or 0
-			local LossMultiplier = self:GetFatLossMultiplier(HungerPercent)
-
-			local NewFat = math.max(0, CurrentFat - FAT_LOSS_RATE * LossMultiplier)
-			StateManager:SetStat(Stats.FAT, NewFat)
-
-			self.LastFatLoss = CurrentTime
-		end
-	end)
-
-	CharacterController.Maid:Set("HungerUpdate", HungerConnection)
-
 	return (self :: any) :: HungerController
 end
 
-function HungerController:GetFatGainMultiplier()
+function HungerController:Update()
+	local CurrentTime = tick()
+	local StateManager = self.Controller.StateManager
+	local Character = self.Controller.Character
+
+	if CurrentTime - self.LastHungerDrain >= HungerConfig.PASSIVE_HUNGER_DRAIN_INTERVAL then
+		local CurrentHunger = StateManager:GetStat(Stats.HUNGER)
+		local NewHunger = math.max(0, CurrentHunger - HungerConfig.PASSIVE_HUNGER_DRAIN_RATE)
+
+		StateManager:SetStat(Stats.HUNGER, NewHunger)
+
+		if Character then
+			Character:SetAttribute(Stats.HUNGER, NewHunger)
+		end
+
+		self.LastHungerDrain = CurrentTime
+	end
+
+	if self:IsStarving() and CurrentTime - self.LastMuscleLoss >= HungerConfig.MUSCLE_LOSS_INTERVAL then
+		local CurrentMuscle = StateManager:GetStat(Stats.MUSCLE)
+
+		if CurrentMuscle > 0 then
+			local NewMuscle = math.max(0, CurrentMuscle - HungerConfig.MUSCLE_LOSS_RATE)
+			StateManager:SetStat(Stats.MUSCLE, NewMuscle)
+			self.LastMuscleLoss = CurrentTime
+		end
+
+		StateManager:FireEvent(StatesModule.Events.HUNGER_CRITICAL, {})
+	end
+
+	if self:IsFull() and CurrentTime - self.LastFatGain >= HungerConfig.FAT_GAIN_INTERVAL then
+		local CurrentFat = StateManager:GetStat(Stats.FAT) or 0
+
+		if CurrentFat >= HungerConfig.FAT_HARD_CAP then
+			return
+		end
+
+		local Multiplier = self:GetFatGainMultiplier()
+		local NewFat = math.min(HungerConfig.FAT_HARD_CAP, CurrentFat + HungerConfig.FAT_GAIN_RATE * Multiplier)
+
+		StateManager:SetStat(Stats.FAT, NewFat)
+		self.LastFatGain = CurrentTime
+	end
+
+	local HungerPercent = self:GetHungerPercent()
+	if HungerPercent < HungerConfig.HUNGER_FULL_THRESHOLD and CurrentTime - self.LastFatLoss >= HungerConfig.FAT_LOSS_INTERVAL then
+		local CurrentFat = StateManager:GetStat(Stats.FAT) or 0
+		local LossMultiplier = self:GetFatLossMultiplier(HungerPercent)
+
+		local NewFat = math.max(0, CurrentFat - HungerConfig.FAT_LOSS_RATE * LossMultiplier)
+		StateManager:SetStat(Stats.FAT, NewFat)
+
+		self.LastFatLoss = CurrentTime
+	end
+end
+
+function HungerController:GetFatGainMultiplier(): number
 	local HungerPercent = self:GetHungerPercent()
 
-	if HungerPercent < HUNGER_FULL_THRESHOLD then
+	if HungerPercent < HungerConfig.HUNGER_FULL_THRESHOLD then
 		return 0
 	end
 
-	local MinHungerPercent = HUNGER_FULL_THRESHOLD
+	local MinHungerPercent = HungerConfig.HUNGER_FULL_THRESHOLD
 	local MaxHungerPercent = 100
 
 	return math.clamp((HungerPercent - MinHungerPercent) / (MaxHungerPercent - MinHungerPercent), 0, 1)
 end
 
-function HungerController:GetFatLossMultiplier(HungerPercent: number)
-	if HungerPercent >= HUNGER_FULL_THRESHOLD then
+function HungerController:GetFatLossMultiplier(HungerPercent: number): number
+	if HungerPercent >= HungerConfig.HUNGER_FULL_THRESHOLD then
 		return 0
 	end
 
-	local DeficitScale = 1 - (HungerPercent / HUNGER_FULL_THRESHOLD)
+	local DeficitScale = 1 - (HungerPercent / HungerConfig.HUNGER_FULL_THRESHOLD)
 
 	local StarvationBoost = 1
-	if HungerPercent < HUNGER_CRITICAL_THRESHOLD then
-		StarvationBoost = 1 + (1.5 * (1 - HungerPercent / HUNGER_CRITICAL_THRESHOLD))
+	if HungerPercent < HungerConfig.HUNGER_CRITICAL_THRESHOLD then
+		StarvationBoost = 1 + (1.5 * (1 - HungerPercent / HungerConfig.HUNGER_CRITICAL_THRESHOLD))
 	end
 
 	return DeficitScale * StarvationBoost
@@ -154,6 +145,7 @@ function HungerController:Feed(Amount: number)
 	if CurrentHunger >= MaxHunger then
 		return
 	end
+
 	local NewHunger = math.min(MaxHunger, CurrentHunger + Amount)
 
 	StateManager:SetStat(Stats.HUNGER, NewHunger)
@@ -179,7 +171,7 @@ function HungerController:ConsumeHungerForStamina(StaminaUsed: number)
 	local StateManager = self.Controller.StateManager
 	local Character = self.Controller.Character
 
-	local HungerCost = StaminaUsed * STAMINA_TO_HUNGER_RATIO
+	local HungerCost = StaminaUsed * HungerConfig.STAMINA_TO_HUNGER_RATIO
 	local CurrentHunger = StateManager:GetStat(Stats.HUNGER)
 	local NewHunger = math.max(0, CurrentHunger - HungerCost)
 
@@ -191,26 +183,24 @@ function HungerController:ConsumeHungerForStamina(StaminaUsed: number)
 end
 
 function HungerController:IsStarving(): boolean
-	return self:GetHungerPercent() < HUNGER_CRITICAL_THRESHOLD
+	return self:GetHungerPercent() < HungerConfig.HUNGER_CRITICAL_THRESHOLD
 end
 
 function HungerController:IsFull(): boolean
-	return self:GetHungerPercent() >= HUNGER_FULL_THRESHOLD
+	return self:GetHungerPercent() >= HungerConfig.HUNGER_FULL_THRESHOLD
 end
 
 function HungerController:GetStatGainMultiplier(): number
 	local HungerPercent = self:GetHungerPercent()
 
-	if HungerPercent >= 5 then
-		return 1.0
+	if HungerPercent >= HungerConfig.STAT_GAIN_THRESHOLD then
+		return HungerConfig.STAT_GAIN_MULTIPLIER_NORMAL
 	else
-		return 0.25
+		return HungerConfig.STAT_GAIN_MULTIPLIER_STARVING
 	end
 end
 
 function HungerController:Destroy()
-	self.Controller.Maid:Set("HungerUpdate", nil)
-
 	for Key in pairs(self) do
 		self[Key] = nil
 	end

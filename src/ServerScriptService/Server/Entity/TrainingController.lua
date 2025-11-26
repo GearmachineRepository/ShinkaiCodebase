@@ -4,9 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TrainingConfigModule = require(Shared.Configurations.TrainingConfig)
 local StatsModule = require(Shared.Configurations.Stats)
-local Stats = StatsModule.Stats
 
-local BASE_FATIGUE_PER_STAT_GAIN = 0.5
+local DEFAULT_FATIGUE_PER_STAT_GAIN = 0.5
 
 export type TrainingType = "Running" | "Jogging" | "WeightTraining" | "Combat" | "Conditioning"
 
@@ -27,30 +26,38 @@ export type TrainingController = {
 	Controller: any,
 	CurrentTraining: TrainingType?,
 	TrainingStartTime: number,
-	TotalExpGained: {[string]: number},
 
 	StartTraining: (self: TrainingController, TrainingType: TrainingType) -> boolean,
 	StopTraining: (self: TrainingController) -> (),
 	ProcessTraining: (self: TrainingController, DeltaTime: number) -> (),
-	GrantStatExp: (self: TrainingController, StatName: string, ExpAmount: number) -> (),
+	GrantStatGain: (self: TrainingController, StatName: string, Amount: number, CustomFatigueRate: number?) -> (),
 	CanTrain: (self: TrainingController) -> boolean,
 	GetTrainingMultiplier: (self: TrainingController) -> number,
+	GetTotalStars: (self: TrainingController) -> number,
 	Destroy: (self: TrainingController) -> (),
 }
 
-function TrainingController.new(CharacterController: any, DataTable: any?): TrainingController
-    local StatsTable = DataTable and DataTable.Stats or {}
-
+function TrainingController.new(CharacterController: any): TrainingController
 	local self = setmetatable({
 		Controller = CharacterController,
 		CurrentTraining = nil,
-        StatsTable = StatsTable,
 		TrainingStartTime = 0,
-		TotalExpGained = {},
 	}, TrainingController)
 
-	for _, StatName in pairs(Stats) do
-		self.TotalExpGained[StatName] = StatsTable[StatName] or 0
+	local Character = self.Controller.Character
+	if Character then
+		for StatName, _ in pairs(StatsModule.Defaults) do
+			if not StatsModule.IsTrainableStat(StatName) then
+				continue
+			end
+
+			local Value = self.Controller.StateManager:GetStat(StatName) or 0
+
+			local Stars = StatsModule.GetStarRating(StatName, Value)
+			Character:SetAttribute(StatName .. "_Stars", Stars)
+			local Progress = StatsModule.GetStarProgress(StatName, Value)
+			Character:SetAttribute(StatName .. "_Progress", Progress)
+		end
 	end
 
 	return (self :: any) :: TrainingController
@@ -102,13 +109,18 @@ function TrainingController:ProcessTraining(DeltaTime: number)
 	end
 
 	local Multiplier = self:GetTrainingMultiplier()
-	local ExpGain = Config.BaseExpGain * DeltaTime * Multiplier
+	local Gain = Config.BaseExpGain * DeltaTime * Multiplier
 
-	self:GrantStatExp(Config.StatName, ExpGain)
+	self:GrantStatGain(Config.StatName, Gain)
 end
 
-function TrainingController:GrantStatExp(StatName: string, ExpAmount: number)
-	if ExpAmount <= 0 then
+function TrainingController:GrantStatGain(StatName: string, Amount: number, CustomFatigueRate: number?)
+	if Amount <= 0 then
+		return
+	end
+
+	if not StatsModule.IsTrainableStat(StatName) then
+		warn("Attempting to train non-trainable stat:", StatName)
 		return
 	end
 
@@ -125,36 +137,45 @@ function TrainingController:GrantStatExp(StatName: string, ExpAmount: number)
 		HungerMultiplier = HungerController:GetStatGainMultiplier()
 	end
 
-	local FinalExpGain = ExpAmount * HungerMultiplier
+	local FinalGain = Amount * HungerMultiplier
 
-	local CurrentStat = StateManager:GetStat(StatName) or 0
-	local NewStat = CurrentStat + FinalExpGain
+	local TotalStars = self:GetTotalStars()
 
-	local TotalStars = StatsModule.CalculateTotalStars({
-		[Stats.DURABILITY] = StateManager:GetStat(Stats.DURABILITY) or 0,
-		[Stats.RUN_SPEED] = StateManager:GetStat(Stats.RUN_SPEED) or 0,
-		[Stats.STRIKING_POWER] = StateManager:GetStat(Stats.STRIKING_POWER) or 0,
-		[Stats.STRIKE_SPEED] = StateManager:GetStat(Stats.STRIKE_SPEED) or 0,
-		[Stats.MUSCLE] = StateManager:GetStat(Stats.MUSCLE) or 0,
-	})
-
-	local SlowdownMultiplier = 1
 	if TotalStars >= StatsModule.TOTAL_STAR_CAP then
-		SlowdownMultiplier = 0.1
+		FinalGain *= StatsModule.POST_CAP_MULTIPLIER
 	end
 
-	NewStat = CurrentStat + (FinalExpGain * SlowdownMultiplier)
+	local CurrentStat = StateManager:GetStat(StatName) or 0
+	local StatCap = StatsModule.GetStatCap(StatName)
+
+	if not StatCap then
+		warn("No cap defined for stat:", StatName)
+		return
+	end
+
+	if CurrentStat >= StatCap then
+		return
+	end
+
+	local NewStat = math.min(StatCap, CurrentStat + FinalGain)
 
 	StateManager:SetStat(StatName, NewStat)
 
-	local FatigueGain = BASE_FATIGUE_PER_STAT_GAIN * FinalExpGain * SlowdownMultiplier
-	BodyFatigueController:AddFatigueFromStatGain(FatigueGain)
+	local FatigueRate = CustomFatigueRate or DEFAULT_FATIGUE_PER_STAT_GAIN
+	if self.CurrentTraining and TRAINING_CONFIGS[self.CurrentTraining] then
+		FatigueRate = TRAINING_CONFIGS[self.CurrentTraining].FatigueGain
+	end
 
-	self.TotalExpGained[StatName] = (self.TotalExpGained[StatName] or 0) + FinalExpGain
+	local FatigueGain = FatigueRate * FinalGain
+	BodyFatigueController:AddFatigueFromStatGain(FatigueGain)
 
 	local Character = self.Controller.Character
 	if Character then
 		Character:SetAttribute(StatName, NewStat)
+		local Stars = StatsModule.GetStarRating(StatName, NewStat)
+		Character:SetAttribute(StatName .. "_Stars", Stars)
+		local Progress = StatsModule.GetStarProgress(StatName, NewStat)
+		Character:SetAttribute(StatName .. "_Progress", Progress)
 	end
 end
 
@@ -171,21 +192,23 @@ end
 function TrainingController:GetTrainingMultiplier(): number
 	local Multiplier = 1.0
 
-	local BodyFatigueController = self.Controller.BodyFatigueController
-	if BodyFatigueController then
-		local FatiguePercent = BodyFatigueController:GetFatiguePercent()
-
-		if FatiguePercent >= 65 then
-			Multiplier = 1.0
-		end
-	end
-
 	local HungerController = self.Controller.HungerController
 	if HungerController then
 		Multiplier *= HungerController:GetStatGainMultiplier()
 	end
 
 	return Multiplier
+end
+
+function TrainingController:GetTotalStars(): number
+	local StateManager = self.Controller.StateManager
+	local StatsTable = {}
+
+	for _, StatName in StatsModule.TrainableStats do
+		StatsTable[StatName] = StateManager:GetStat(StatName) or 0
+	end
+
+	return StatsModule.CalculateTotalStars(StatsTable)
 end
 
 function TrainingController:Destroy()
