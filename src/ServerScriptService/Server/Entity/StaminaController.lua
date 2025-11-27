@@ -1,4 +1,5 @@
 --!strict
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -6,7 +7,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local StatsModule = require(Shared.Configurations.Stats)
 local StaminaConfig = require(Shared.Configurations.StaminaConfig)
 local Stats = StatsModule.Stats
-local Defaults = StatsModule.Defaults
 
 export type StaminaController = {
 	Controller: any,
@@ -22,6 +22,7 @@ export type StaminaController = {
 	HandleSprint: (self: StaminaController, DeltaTime: number) -> boolean,
 	HandleJog: (self: StaminaController, DeltaTime: number) -> boolean,
 	RestoreStamina: (self: StaminaController, Amount: number) -> (),
+	GetMaxStamina: (self: StaminaController) -> number,
 	Destroy: (self: StaminaController) -> (),
 }
 
@@ -39,7 +40,7 @@ function StaminaController.new(CharacterController: any): StaminaController
 	local Character = CharacterController.Character
 
 	if Character then
-		local MaxStamina = CharacterController.StateManager:GetStat(Stats.MAX_STAMINA)
+		local MaxStamina = self:GetMaxStamina()
 		Character:SetAttribute(Stats.STAMINA, MaxStamina)
 		Character:SetAttribute(Stats.MAX_STAMINA, MaxStamina)
 		Character:SetAttribute("Drained", false)
@@ -47,6 +48,12 @@ function StaminaController.new(CharacterController: any): StaminaController
 	end
 
 	return (self :: any) :: StaminaController
+end
+
+function StaminaController:GetMaxStamina(): number
+	local StateManager = self.Controller.StateManager
+	local AllocatedStars = StateManager:GetStat(Stats.MAX_STAMINA .. "_Stars") or 0
+	return StatsModule.GetStatValueFromStars(Stats.MAX_STAMINA, AllocatedStars)
 end
 
 function StaminaController:StartRegen()
@@ -60,7 +67,7 @@ function StaminaController:StartRegen()
 		end
 
 		local CurrentStamina = StateManager:GetStat(Stats.STAMINA)
-		local MaxStamina = StateManager:GetStat(Stats.MAX_STAMINA)
+		local MaxStamina = self:GetMaxStamina()
 
 		if CurrentStamina >= MaxStamina then
 			self:StopRegen()
@@ -68,7 +75,8 @@ function StaminaController:StartRegen()
 		end
 
 		local BaseRegen = StaminaConfig.STAMINA_REGEN_RATE
-		local RegenMultiplier = MaxStamina / Defaults[Stats.MAX_STAMINA]
+		local BaseMaxStamina = StatsModule.GetStatBase(Stats.MAX_STAMINA) or 75
+		local RegenMultiplier = MaxStamina / BaseMaxStamina
 		local RegenRate = BaseRegen * RegenMultiplier
 
 		if self.IsExhausted then
@@ -81,6 +89,7 @@ function StaminaController:StartRegen()
 
 		if Character then
 			Character:SetAttribute(Stats.STAMINA, NewStamina)
+			Character:SetAttribute(Stats.MAX_STAMINA, MaxStamina)
 
 			local StaminaPercent = (NewStamina / MaxStamina) * 100
 			Character:SetAttribute("Drained", StaminaPercent <= StaminaConfig.DRAINED_THRESHOLD)
@@ -110,11 +119,12 @@ function StaminaController:ConsumeStamina(Amount: number): boolean
 
 	if CurrentStamina >= Amount then
 		local NewStamina = CurrentStamina - Amount
-		local MaxStamina = StateManager:GetStat(Stats.MAX_STAMINA)
+		local MaxStamina = self:GetMaxStamina()
 		StateManager:SetStat(Stats.STAMINA, NewStamina)
 
 		if Character then
 			Character:SetAttribute(Stats.STAMINA, NewStamina)
+			Character:SetAttribute(Stats.MAX_STAMINA, MaxStamina)
 
 			local StaminaPercent = (NewStamina / MaxStamina) * 100
 			Character:SetAttribute("Drained", StaminaPercent <= StaminaConfig.DRAINED_THRESHOLD)
@@ -149,7 +159,7 @@ end
 function StaminaController:GetStaminaPercent(): number
 	local StateManager = self.Controller.StateManager
 	local CurrentStamina = StateManager:GetStat(Stats.STAMINA)
-	local MaxStamina = StateManager:GetStat(Stats.MAX_STAMINA)
+	local MaxStamina = self:GetMaxStamina()
 
 	return (CurrentStamina / MaxStamina) * 100
 end
@@ -187,13 +197,14 @@ function StaminaController:RestoreStamina(Amount: number)
 	local Character = self.Controller.Character
 
 	local CurrentStamina = StateManager:GetStat(Stats.STAMINA)
-	local MaxStamina = StateManager:GetStat(Stats.MAX_STAMINA)
+	local MaxStamina = self:GetMaxStamina()
 	local NewStamina = math.min(MaxStamina, CurrentStamina + Amount)
 
 	StateManager:SetStat(Stats.STAMINA, NewStamina)
 
 	if Character then
 		Character:SetAttribute(Stats.STAMINA, NewStamina)
+		Character:SetAttribute(Stats.MAX_STAMINA, MaxStamina)
 
 		local StaminaPercent = (NewStamina / MaxStamina) * 100
 		Character:SetAttribute("Drained", StaminaPercent <= StaminaConfig.DRAINED_THRESHOLD)

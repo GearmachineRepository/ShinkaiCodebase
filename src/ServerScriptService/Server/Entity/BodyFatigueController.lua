@@ -16,7 +16,9 @@ export type BodyFatigueController = {
 	AddFatigueFromStatGain: (self: BodyFatigueController, BaseAmount: number) -> (),
 	SetRestMultiplier: (self: BodyFatigueController, Multiplier: number) -> (),
 	SetFortitude: (self: BodyFatigueController, HasFortitude: boolean) -> (),
+	ResetSweatTimer: (self: BodyFatigueController) -> (),
 	GetStaminaDrainMultiplier: (self: BodyFatigueController) -> number,
+	GetStatGainMultiplier: (self: BodyFatigueController) -> number,
 	IsOverSoftCap: (self: BodyFatigueController) -> boolean,
 	CanGainStats: (self: BodyFatigueController) -> boolean,
 	GetFatiguePercent: (self: BodyFatigueController) -> number,
@@ -29,6 +31,7 @@ BodyFatigueController.__index = BodyFatigueController
 
 function BodyFatigueController.new(CharacterController: any, DataTable: any?): BodyFatigueController
 	local SavedFatigue = 0
+
 	if DataTable and DataTable.Stats then
 		SavedFatigue = DataTable.Stats[Stats.BODY_FATIGUE] or 0
 	end
@@ -36,7 +39,7 @@ function BodyFatigueController.new(CharacterController: any, DataTable: any?): B
 	local self = setmetatable({
 		Controller = CharacterController,
 		CurrentFatigue = SavedFatigue,
-		LastSweatTime = -math.huge,
+		LastSweatTime = tick(),
 		RestMultiplier = 1,
 		HasFortitude = false,
 	}, BodyFatigueController)
@@ -108,6 +111,15 @@ function BodyFatigueController:SetFortitude(HasFortitude: boolean)
 	self.HasFortitude = HasFortitude
 end
 
+function BodyFatigueController:ResetSweatTimer()
+	self.LastSweatTime = -math.huge
+
+	local Character = self.Controller.Character
+	if Character then
+		Character:SetAttribute("Sweating", false)
+	end
+end
+
 function BodyFatigueController:GetStaminaDrainMultiplier(): number
 	local FatiguePercent = self:GetFatiguePercent()
 
@@ -123,8 +135,7 @@ function BodyFatigueController:IsOverSoftCap(): boolean
 end
 
 function BodyFatigueController:CanGainStats(): boolean
-	local EffectiveCap = self:GetEffectiveCap()
-	return self:GetFatiguePercent() < EffectiveCap
+	return true
 end
 
 function BodyFatigueController:GetEffectiveCap(): number
@@ -132,6 +143,20 @@ function BodyFatigueController:GetEffectiveCap(): number
 		return BodyFatigueConfig.FORTITUDE_CAP_PERCENT
 	end
 	return BodyFatigueConfig.SOFT_CAP_PERCENT
+end
+
+function BodyFatigueController:GetStatGainMultiplier(): number
+	local FatiguePercent = self:GetFatiguePercent()
+
+	if FatiguePercent < BodyFatigueConfig.SOFT_CAP_PERCENT then
+		return 1.0
+	end
+
+	local FatigueRange = 100 - BodyFatigueConfig.SOFT_CAP_PERCENT
+	local FatigueOverCap = FatiguePercent - BodyFatigueConfig.SOFT_CAP_PERCENT
+	local Progress = math.clamp(FatigueOverCap / FatigueRange, 0, 1)
+
+	return 1.0 - Progress
 end
 
 function BodyFatigueController:GetFatiguePercent(): number

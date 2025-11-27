@@ -7,16 +7,34 @@ return {
 	Stats = {
 		[Stats.BODY_FATIGUE] = Defaults[Stats.BODY_FATIGUE],
 		[Stats.MAX_BODY_FATIGUE] = Defaults[Stats.MAX_BODY_FATIGUE],
-		[Stats.MAX_STAMINA] = Defaults[Stats.MAX_STAMINA],
 		[Stats.MAX_HEALTH] = Defaults[Stats.MAX_HEALTH],
 		[Stats.MAX_HUNGER] = Defaults[Stats.MAX_HUNGER],
-		[Stats.DURABILITY] = Defaults[Stats.DURABILITY],
-		[Stats.RUN_SPEED] = Defaults[Stats.RUN_SPEED],
-		[Stats.STRIKING_POWER] = Defaults[Stats.STRIKING_POWER],
-		[Stats.STRIKE_SPEED] = Defaults[Stats.STRIKE_SPEED],
-		[Stats.MUSCLE] = Defaults[Stats.MUSCLE],
 		[Stats.HUNGER] = Defaults[Stats.HUNGER],
 		[Stats.FAT] = Defaults[Stats.FAT],
+
+		-- XP Values (raw training progress)
+		[Stats.MAX_STAMINA .. "_XP"] = Defaults[Stats.MAX_STAMINA],
+		[Stats.DURABILITY .. "_XP"] = Defaults[Stats.DURABILITY],
+		[Stats.RUN_SPEED .. "_XP"] = Defaults[Stats.RUN_SPEED],
+		[Stats.STRIKING_POWER .. "_XP"] = Defaults[Stats.STRIKING_POWER],
+		[Stats.STRIKE_SPEED .. "_XP"] = Defaults[Stats.STRIKE_SPEED],
+		[Stats.MUSCLE .. "_XP"] = Defaults[Stats.MUSCLE],
+
+		-- Allocated Stars (player choices)
+		[Stats.MAX_STAMINA .. "_Stars"] = 0,
+		[Stats.DURABILITY .. "_Stars"] = 0,
+		[Stats.RUN_SPEED .. "_Stars"] = 0,
+		[Stats.STRIKING_POWER .. "_Stars"] = 0,
+		[Stats.STRIKE_SPEED .. "_Stars"] = 0,
+		[Stats.MUSCLE .. "_Stars"] = 0,
+
+		-- Available Points (unallocated)
+		[Stats.MAX_STAMINA .. "_AvailablePoints"] = 0,
+		[Stats.DURABILITY .. "_AvailablePoints"] = 0,
+		[Stats.RUN_SPEED .. "_AvailablePoints"] = 0,
+		[Stats.STRIKING_POWER .. "_AvailablePoints"] = 0,
+		[Stats.STRIKE_SPEED .. "_AvailablePoints"] = 0,
+		[Stats.MUSCLE .. "_AvailablePoints"] = 0,
 	},
 	Backpack = {},
 	Hotbar = {},

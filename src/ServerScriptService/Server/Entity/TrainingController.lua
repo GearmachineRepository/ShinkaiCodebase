@@ -1,96 +1,73 @@
 --!strict
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local TrainingConfigModule = require(Shared.Configurations.TrainingConfig)
 local StatsModule = require(Shared.Configurations.Stats)
 
 local DEFAULT_FATIGUE_PER_STAT_GAIN = 0.5
 
-export type TrainingType = "Running" | "Jogging" | "WeightTraining" | "Combat" | "Conditioning"
-
-export type TrainingConfig = {
-	StatName: string,
-	BaseExpGain: number,
-	FatigueGain: number,
-	RequiredMovement: boolean?,
-	RequiredStamina: number?,
-}
-
-local TRAINING_CONFIGS: {[TrainingType]: TrainingConfig} = TrainingConfigModule
-
-local TrainingController = {}
-TrainingController.__index = TrainingController
+local TRAINING_CONFIGS = require(Shared.Configurations.TrainingConfig)
 
 export type TrainingController = {
 	Controller: any,
-	CurrentTraining: TrainingType?,
-	TrainingStartTime: number,
+	CurrentTraining: string?,
+	IsTraining: boolean,
 
-	StartTraining: (self: TrainingController, TrainingType: TrainingType) -> boolean,
+	StartTraining: (self: TrainingController, TrainingType: string) -> (),
 	StopTraining: (self: TrainingController) -> (),
 	ProcessTraining: (self: TrainingController, DeltaTime: number) -> (),
 	GrantStatGain: (self: TrainingController, StatName: string, Amount: number, CustomFatigueRate: number?) -> (),
+	AllocateStatPoint: (self: TrainingController, StatName: string) -> boolean,
 	CanTrain: (self: TrainingController) -> boolean,
 	GetTrainingMultiplier: (self: TrainingController) -> number,
-	GetTotalStars: (self: TrainingController) -> number,
+	GetTotalAllocatedStars: (self: TrainingController) -> number,
+	UpdateAvailablePoints: (self: TrainingController, StatName: string) -> (),
 	Destroy: (self: TrainingController) -> (),
 }
+
+local TrainingController = {}
+TrainingController.__index = TrainingController
 
 function TrainingController.new(CharacterController: any): TrainingController
 	local self = setmetatable({
 		Controller = CharacterController,
 		CurrentTraining = nil,
-		TrainingStartTime = 0,
+		IsTraining = false,
 	}, TrainingController)
 
 	local Character = self.Controller.Character
 	if Character then
-		for StatName, _ in pairs(StatsModule.Defaults) do
-			if not StatsModule.IsTrainableStat(StatName) then
-				continue
-			end
+		for _, StatName in StatsModule.TrainableStats do
+			local XPValue = self.Controller.StateManager:GetStat(StatName .. "_XP") or 0
+			local AllocatedStars = self.Controller.StateManager:GetStat(StatName .. "_Stars") or 0
 
-			local Value = self.Controller.StateManager:GetStat(StatName) or 0
+			Character:SetAttribute(StatName .. "_XP", XPValue)
+			Character:SetAttribute(StatName .. "_Stars", AllocatedStars)
 
-			local Stars = StatsModule.GetStarRating(StatName, Value)
-			Character:SetAttribute(StatName .. "_Stars", Stars)
-			local Progress = StatsModule.GetStarProgress(StatName, Value)
-			Character:SetAttribute(StatName .. "_Progress", Progress)
+			self:UpdateAvailablePoints(StatName)
+
+			local StatValue = StatsModule.GetStatValueFromStars(StatName, AllocatedStars)
+			Character:SetAttribute(StatName, StatValue)
+			self.Controller.StateManager:SetStat(StatName, StatValue, true)
 		end
 	end
 
-	return (self :: any) :: TrainingController
+	return self
 end
 
-function TrainingController:StartTraining(TrainingType: TrainingType): boolean
-	if not self:CanTrain() then
-		return false
-	end
-
-	if self.CurrentTraining then
-		self:StopTraining()
+function TrainingController:StartTraining(TrainingType: string)
+	if not TRAINING_CONFIGS[TrainingType] then
+		warn("Invalid training type:", TrainingType)
+		return
 	end
 
 	self.CurrentTraining = TrainingType
-	self.TrainingStartTime = tick()
-
-	local Character = self.Controller.Character
-	if Character then
-		Character:SetAttribute("Training", TrainingType)
-	end
-
-	return true
+	self.IsTraining = true
 end
 
 function TrainingController:StopTraining()
 	self.CurrentTraining = nil
-	self.TrainingStartTime = 0
-
-	local Character = self.Controller.Character
-	if Character then
-		Character:SetAttribute("Training", nil)
-	end
+	self.IsTraining = false
 end
 
 function TrainingController:ProcessTraining(DeltaTime: number)
@@ -111,7 +88,25 @@ function TrainingController:ProcessTraining(DeltaTime: number)
 	local Multiplier = self:GetTrainingMultiplier()
 	local Gain = Config.BaseExpGain * DeltaTime * Multiplier
 
-	self:GrantStatGain(Config.StatName, Gain)
+	self:GrantStatGain(Config.StatName, Gain, Config.FatigueGain)
+end
+
+function TrainingController:UpdateAvailablePoints(StatName: string)
+	local StateManager = self.Controller.StateManager
+	local Character = self.Controller.Character
+
+	local XPValue = StateManager:GetStat(StatName .. "_XP") or 0
+	local AllocatedStars = StateManager:GetStat(StatName .. "_Stars") or 0
+
+	local AvailablePoints = StatsModule.GetAvailablePointsFromXP(StatName, XPValue, AllocatedStars)
+	local Progress = StatsModule.GetXPProgressToNextPoint(StatName, XPValue, AllocatedStars)
+
+	StateManager:SetStat(StatName .. "_AvailablePoints", AvailablePoints)
+
+	if Character then
+		Character:SetAttribute(StatName .. "_AvailablePoints", AvailablePoints)
+		Character:SetAttribute(StatName .. "_Progress", Progress)
+	end
 end
 
 function TrainingController:GrantStatGain(StatName: string, Amount: number, CustomFatigueRate: number?)
@@ -128,38 +123,25 @@ function TrainingController:GrantStatGain(StatName: string, Amount: number, Cust
 	local BodyFatigueController = self.Controller.BodyFatigueController
 	local HungerController = self.Controller.HungerController
 
-	if not BodyFatigueController:CanGainStats() then
-		return
-	end
-
 	local HungerMultiplier = 1
 	if HungerController then
 		HungerMultiplier = HungerController:GetStatGainMultiplier()
 	end
 
-	local FinalGain = Amount * HungerMultiplier
-
-	local TotalStars = self:GetTotalStars()
-
-	if TotalStars >= StatsModule.TOTAL_STAR_CAP then
-		FinalGain *= StatsModule.POST_CAP_MULTIPLIER
+	local FatigueMultiplier = 1
+	if BodyFatigueController then
+		FatigueMultiplier = BodyFatigueController:GetStatGainMultiplier()
 	end
 
-	local CurrentStat = StateManager:GetStat(StatName) or 0
-	local StatCap = StatsModule.GetStatCap(StatName)
+	local TotalAllocatedStars = self:GetTotalAllocatedStars()
+	local DiminishingMultiplier = StatsModule.GetDiminishingReturnsMultiplier(TotalAllocatedStars)
 
-	if not StatCap then
-		warn("No cap defined for stat:", StatName)
-		return
-	end
+	local FinalGain = Amount * HungerMultiplier * FatigueMultiplier * DiminishingMultiplier
 
-	if CurrentStat >= StatCap then
-		return
-	end
+	local CurrentXP = StateManager:GetStat(StatName .. "_XP") or 0
+	local NewXP = CurrentXP + FinalGain
 
-	local NewStat = math.min(StatCap, CurrentStat + FinalGain)
-
-	StateManager:SetStat(StatName, NewStat)
+	StateManager:SetStat(StatName .. "_XP", NewXP)
 
 	local FatigueRate = CustomFatigueRate or DEFAULT_FATIGUE_PER_STAT_GAIN
 	if self.CurrentTraining and TRAINING_CONFIGS[self.CurrentTraining] then
@@ -171,12 +153,48 @@ function TrainingController:GrantStatGain(StatName: string, Amount: number, Cust
 
 	local Character = self.Controller.Character
 	if Character then
-		Character:SetAttribute(StatName, NewStat)
-		local Stars = StatsModule.GetStarRating(StatName, NewStat)
-		Character:SetAttribute(StatName .. "_Stars", Stars)
-		local Progress = StatsModule.GetStarProgress(StatName, NewStat)
-		Character:SetAttribute(StatName .. "_Progress", Progress)
+		Character:SetAttribute(StatName .. "_XP", NewXP)
 	end
+
+	self:UpdateAvailablePoints(StatName)
+end
+
+function TrainingController:AllocateStatPoint(StatName: string): boolean
+	if not StatsModule.IsTrainableStat(StatName) then
+		warn("Cannot allocate point to non-trainable stat:", StatName)
+		return false
+	end
+
+	local StateManager = self.Controller.StateManager
+
+	local AvailablePoints = StateManager:GetStat(StatName .. "_AvailablePoints") or 0
+	if AvailablePoints <= 0 then
+		warn("No available points for stat:", StatName)
+		return false
+	end
+
+	local AllocatedStars = StateManager:GetStat(StatName .. "_Stars") or 0
+	local TotalAllocatedStars = self:GetTotalAllocatedStars()
+
+	if not StatsModule.CanAllocateStatPoint(StatName, AllocatedStars, TotalAllocatedStars) then
+		warn("Cannot allocate stat point - cap reached")
+		return false
+	end
+
+	local NewStars = AllocatedStars + 1
+	StateManager:SetStat(StatName .. "_Stars", NewStars)
+
+	local Character = self.Controller.Character
+	if Character then
+		Character:SetAttribute(StatName .. "_Stars", NewStars)
+
+		local StatValue = StatsModule.GetStatValueFromStars(StatName, NewStars)
+		Character:SetAttribute(StatName, StatValue)
+	end
+
+	self:UpdateAvailablePoints(StatName)
+
+	return true
 end
 
 function TrainingController:CanTrain(): boolean
@@ -200,15 +218,15 @@ function TrainingController:GetTrainingMultiplier(): number
 	return Multiplier
 end
 
-function TrainingController:GetTotalStars(): number
+function TrainingController:GetTotalAllocatedStars(): number
 	local StateManager = self.Controller.StateManager
-	local StatsTable = {}
+	local StarsTable = {}
 
 	for _, StatName in StatsModule.TrainableStats do
-		StatsTable[StatName] = StateManager:GetStat(StatName) or 0
+		StarsTable[StatName] = StateManager:GetStat(StatName .. "_Stars") or 0
 	end
 
-	return StatsModule.CalculateTotalStars(StatsTable)
+	return StatsModule.CalculateTotalAllocatedStars(StarsTable)
 end
 
 function TrainingController:Destroy()

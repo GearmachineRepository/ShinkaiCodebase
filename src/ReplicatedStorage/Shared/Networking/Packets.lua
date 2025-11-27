@@ -33,4 +33,7 @@ return {
 
 	-- Food
 	ConsumeFood = Packet("ConsumeFood", Packet.NumberF32, Packet.Any),
+
+	-- Stats
+	AllocateStatPoint = Packet("AllocateStatPoint", Packet.String),
 }

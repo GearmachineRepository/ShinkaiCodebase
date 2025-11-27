@@ -10,7 +10,8 @@ local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local Hud = PlayerGui:WaitForChild("Hud")
 local Frames = Hud:WaitForChild("Frames")
-local BarsFolder = Frames:WaitForChild("Bars")
+local BarsFrame = Frames:WaitForChild("Bars")
+local BarsFolder = BarsFrame:WaitForChild("BarFrames")
 
 local BAR_UPDATE_RATE = 0.05
 local LERP_SPEED = 10
@@ -119,7 +120,7 @@ local function SetupCharacter(Character: Model)
 			BarData.Quantity.Text = tostring(math.floor(BarData.TargetValue * 100)) .. "%"
 		end
 
-		local BodyFatigueTextLabel = Hud:FindFirstChild("BodyFatiguePercentage", true)
+		local BodyFatigueTextLabel = BarsFrame:FindFirstChild("BodyFatiguePercentage", true)
 		if BodyFatigueTextLabel then
 			local BodyFatigue = Character:GetAttribute("BodyFatigue") or Character:GetAttribute("BodyFatigue") or 0
 			local MaxBodyFatigue = Character:GetAttribute("MaxBodyFatigue") or Character:GetAttribute("MaxBodyFatigue") or 100
@@ -127,6 +128,9 @@ local function SetupCharacter(Character: Model)
 			local Rounded = Formulas.Round(Percentage, 1)
 			if Rounded % 0.15 == 0 then
 				BodyFatigueTextLabel.Text = tostring(Rounded) .. "%"
+				if not BodyFatigueTextLabel.TextFits then
+					BodyFatigueTextLabel.TextFits = true
+				end
 			end
 		end
 	end)

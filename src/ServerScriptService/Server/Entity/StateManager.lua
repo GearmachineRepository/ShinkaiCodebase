@@ -45,7 +45,7 @@ function StateManager:SetState(StateName: string, Value: StateValue, Default: bo
 	end
 
 	if typeof(Value) == "number" then
-		Value = Formulas.Round(Value, 3)
+		Value = Formulas.Round(Value, 4)
 	end
 
 	self.States[StateName] = Value
