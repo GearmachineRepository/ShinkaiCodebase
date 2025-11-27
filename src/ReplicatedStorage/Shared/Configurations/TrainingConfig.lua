@@ -13,7 +13,7 @@ return {
 	},
 	Jogging = {
 		StatName = Stats.MAX_STAMINA,
-		BaseExpGain = 15,
+		BaseExpGain = 0.045,
 		FatigueGain = BASE_FATIGUE_PER_STAT_GAIN * 0.8,
 		RequiredMovement = true,
 	},

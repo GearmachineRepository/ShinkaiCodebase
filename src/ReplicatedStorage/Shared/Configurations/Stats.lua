@@ -25,8 +25,8 @@ local Stats = {
 	STRIKE_SPEED = "StrikeSpeed",
 }
 
-local SOFT_CAP_THRESHOLD = 15
-local HARD_CAP_THRESHOLD = 30
+local SOFT_CAP_THRESHOLD = 20
+local HARD_CAP_THRESHOLD = 35
 local POST_CAP_MULTIPLIER = 0.25
 local MAX_STARS_DISPLAYED = 5
 
@@ -72,7 +72,8 @@ local StarTiers = {
 	{Min = 10, Max = 14, Name = "Gold", Color = Color3.fromRGB(224, 198, 79)},
 	{Min = 15, Max = 19, Name = "Platinum", Color = Color3.fromRGB(113, 153, 172)},
 	{Min = 20, Max = 24, Name = "Emerald", Color = Color3.fromRGB(80, 200, 120)},
-	{Min = 25, Max = math.huge, Name = "Diamond", Color = Color3.fromRGB(116, 245, 250)},
+	{Min = 25, Max = 29, Name = "Diamond", Color = Color3.fromRGB(116, 245, 250)},
+	{Min = 30, Max = math.huge, Name = "Champion", Color = Color3.fromRGB(207, 63, 171)},
 }
 
 local Defaults = {

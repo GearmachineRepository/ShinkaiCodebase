@@ -7,6 +7,7 @@ local Configs = Shared:WaitForChild("Configurations")
 local StatsModule = require(Configs:WaitForChild("Stats"))
 local Network = Shared:WaitForChild("Networking")
 local Packet = require(Network:WaitForChild("Packets"))
+local Formulas = require(Shared.General.Formulas)
 local TrainableStats = StatsModule.TrainableStats
 
 local Player = Players.LocalPlayer
@@ -19,6 +20,9 @@ local StatTemplate = StatsList:WaitForChild("StatTemplate")
 
 local Character = script.Parent
 
+local PointText = "Points: "
+local BuffText = "+"
+
 local StatFrames = {}
 
 for _, Stat in pairs(TrainableStats) do
@@ -28,12 +32,22 @@ for _, Stat in pairs(TrainableStats) do
 	NewTemplate.Visible = true
 	NewTemplate.Parent = StatTemplate.Parent
 
+	if not NewTemplate.StatName.TextFits then
+		NewTemplate.StatName.TextFits = true
+	end
+
 	local AllocateButton = NewTemplate:FindFirstChild("Allocate")
 	local PointsLabel = NewTemplate:FindFirstChild("Points")
+	local TotalStatBuffLabel = NewTemplate:FindFirstChild("TotalBuff")
 
 	if PointsLabel then
-		PointsLabel.Text = "Points: 0"
+		PointsLabel.Text = PointText .. "0"
 	end
+
+	if TotalStatBuffLabel then
+		TotalStatBuffLabel.Text = BuffText .. "0"
+	end
+
 	if AllocateButton then
 		AllocateButton.Visible = false
 
@@ -109,6 +123,14 @@ local function UpdateStatStars(BaseStatName: string)
 			end
 		end
 	end
+
+	local TotalStatBuffLabel = StatFrame:FindFirstChild("TotalBuff")
+	if TotalStatBuffLabel then
+		local StatValue = StatsModule.GetStatValueFromStars(BaseStatName, AllocatedStars)
+		local BaseValue = StatsModule.GetStatBase(BaseStatName) or 0
+		local BuffAmount = Formulas.Round(StatValue - BaseValue, 2)
+		TotalStatBuffLabel.Text = BuffText .. tostring(BuffAmount)
+	end
 end
 
 local Attributes = Character:GetAttributes()
@@ -148,7 +170,7 @@ Character.AttributeChanged:Connect(function(AttrName: string)
 			local CanAllocate = AllocatablePoints > 0 and TotalStars < StatsModule.HARD_CAP_THRESHOLD
 
 			AllocateButton.Visible = CanAllocate
-			PointsLabel.Text = "Points: " .. tostring(AllocatablePoints)
+			PointsLabel.Text = PointText .. tostring(AllocatablePoints)
 
 			if TotalStars >= StatsModule.HARD_CAP_THRESHOLD then
 				PointsLabel.Text = "MAXED"
