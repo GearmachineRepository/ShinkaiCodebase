@@ -36,4 +36,7 @@ return {
 
 	-- Stats
 	AllocateStatPoint = Packet("AllocateStatPoint", Packet.String),
+
+	-- Interactions
+	InteractRequest = Packet("InteractRequest", Packet.Instance, Packet.Boolean8),
 }

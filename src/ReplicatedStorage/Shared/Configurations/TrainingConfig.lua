@@ -7,13 +7,13 @@ local BASE_FATIGUE_PER_STAT_GAIN = 0.5
 return {
 	Running = {
 		StatName = Stats.RUN_SPEED,
-		BaseExpGain = 0.045,
+		BaseExpGain = 15, -- 0.015,
 		FatigueGain = BASE_FATIGUE_PER_STAT_GAIN * 0.7,
 		RequiredMovement = true,
 	},
 	Jogging = {
 		StatName = Stats.MAX_STAMINA,
-		BaseExpGain = 0.045,
+		BaseExpGain = 0.185,
 		FatigueGain = BASE_FATIGUE_PER_STAT_GAIN * 0.8,
 		RequiredMovement = true,
 	},

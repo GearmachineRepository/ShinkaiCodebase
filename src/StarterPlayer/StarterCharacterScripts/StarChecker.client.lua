@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Configs = Shared:WaitForChild("Configurations")
 local StatsModule = require(Configs:WaitForChild("Stats"))
+local HungerConfig = require(Configs:WaitForChild("HungerConfig"))
 local Network = Shared:WaitForChild("Networking")
 local Packet = require(Network:WaitForChild("Packets"))
 local Formulas = require(Shared.General.Formulas)
@@ -57,13 +58,10 @@ for _, Stat in pairs(TrainableStats) do
 				return
 			end
 
-			local TotalStars = 0
-			for _, StatName in TrainableStats do
-				TotalStars += Character:GetAttribute(StatName .. "_Stars") or 0
-			end
+			local CurrentStars = Character:GetAttribute(Stat .. "_Stars") or 0
 
-			if TotalStars >= StatsModule.HARD_CAP_THRESHOLD then
-				warn("Hard cap reached! Cannot allocate more stars.")
+			if CurrentStars >= StatsModule.HARD_CAP_THRESHOLD then
+				warn("This stat is maxed at 35 stars!")
 				return
 			end
 
@@ -77,12 +75,15 @@ end
 local MAX_STARS_PER_ROW = 5
 local DIM_COLOR = Color3.fromRGB(50, 50, 50)
 
-local function GetTotalAllocatedStars(): number
-	local TotalStars = 0
-	for _, StatName in TrainableStats do
-		TotalStars += Character:GetAttribute(StatName .. "_Stars") or 0
-	end
-	return TotalStars
+local function GetHungerPercent(): number
+	local CurrentHunger = Character:GetAttribute(StatsModule.Stats.HUNGER) or 0
+	local MaxHunger = Character:GetAttribute(StatsModule.Stats.MAX_HUNGER) or 1
+
+	return (CurrentHunger / MaxHunger) * 100
+end
+
+local function IsStarving(): boolean
+	return GetHungerPercent() < HungerConfig.HUNGER_CRITICAL_THRESHOLD
 end
 
 local function UpdateStatStars(BaseStatName: string)
@@ -126,7 +127,10 @@ local function UpdateStatStars(BaseStatName: string)
 
 	local TotalStatBuffLabel = StatFrame:FindFirstChild("TotalBuff")
 	if TotalStatBuffLabel then
-		local StatValue = StatsModule.GetStatValueFromStars(BaseStatName, AllocatedStars)
+		local MuscleValue = Character:GetAttribute(StatsModule.Stats.MUSCLE) or 0
+		local Starving = IsStarving()
+
+		local StatValue = StatsModule.GetStatValueFromStarsWithPenalties(BaseStatName, AllocatedStars, MuscleValue, Starving)
 		local BaseValue = StatsModule.GetStatBase(BaseStatName) or 0
 		local BuffAmount = Formulas.Round(StatValue - BaseValue, 2)
 		TotalStatBuffLabel.Text = BuffText .. tostring(BuffAmount)
@@ -147,6 +151,12 @@ Character.AttributeChanged:Connect(function(AttrName: string)
 		UpdateStatStars(BaseStatName)
 	end
 
+	if AttrName == StatsModule.Stats.MUSCLE or AttrName == StatsModule.Stats.HUNGER then
+		for _, StatName in TrainableStats do
+			UpdateStatStars(StatName)
+		end
+	end
+
 	if AttrName:match("_AvailablePoints$") then
 		local BaseStatName = AttrName:gsub("_AvailablePoints$", "")
 
@@ -165,14 +175,14 @@ Character.AttributeChanged:Connect(function(AttrName: string)
 		local PointsLabel = StatFrame:FindFirstChild("Points")
 		if AllocateButton and PointsLabel then
 			local AllocatablePoints = Character:GetAttribute(BaseStatName .. "_AvailablePoints") or 0
-			local TotalStars = GetTotalAllocatedStars()
+			local CurrentStars = Character:GetAttribute(BaseStatName .. "_Stars") or 0
 
-			local CanAllocate = AllocatablePoints > 0 and TotalStars < StatsModule.HARD_CAP_THRESHOLD
+			local CanAllocate = AllocatablePoints > 0 and CurrentStars < StatsModule.HARD_CAP_THRESHOLD
 
 			AllocateButton.Visible = CanAllocate
 			PointsLabel.Text = PointText .. tostring(AllocatablePoints)
 
-			if TotalStars >= StatsModule.HARD_CAP_THRESHOLD then
+			if CurrentStars >= StatsModule.HARD_CAP_THRESHOLD then
 				PointsLabel.Text = "MAXED"
 			end
 		end

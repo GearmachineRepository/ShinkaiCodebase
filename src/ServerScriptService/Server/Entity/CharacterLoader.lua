@@ -68,6 +68,8 @@ function CharacterLoader.SpawnCharacter(Player: Player, Data)
 		Player.Character = Character
 		Character.Parent = workspace
 
+		Character:AddTag("Character")
+
 		CloneStarterScripts(Character)
 
 		local Success, Humanoid = pcall(function()

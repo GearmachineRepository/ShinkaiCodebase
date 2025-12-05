@@ -32,11 +32,8 @@ local function HandleAllocateStatPoint(Player: Player, StatName: string)
 	end
 
 	local Success = TrainingController:AllocateStatPoint(StatName)
-
-	if Success then
-		print(Player.Name, "allocated stat point to", StatName)
-	else
-		warn(Player.Name, "failed to allocate stat point to", StatName)
+	if not Success then
+		warn("Player failed to allocate stat point:", Player.Name, StatName)
 	end
 end
 

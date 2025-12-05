@@ -9,6 +9,7 @@ export type BodyFatigueController = {
 	Controller: any,
 	CurrentFatigue: number,
 	LastSweatTime: number,
+	FirstTrainingTime: number?,
 	RestMultiplier: number,
 	HasFortitude: boolean,
 
@@ -40,6 +41,7 @@ function BodyFatigueController.new(CharacterController: any, DataTable: any?): B
 		Controller = CharacterController,
 		CurrentFatigue = SavedFatigue,
 		LastSweatTime = tick(),
+		FirstTrainingTime = nil,
 		RestMultiplier = 1,
 		HasFortitude = false,
 	}, BodyFatigueController)
@@ -63,8 +65,19 @@ function BodyFatigueController:AddFatigueFromStatGain(BaseAmount: number)
 		return
 	end
 
-	self.LastSweatTime = tick()
-	Character:SetAttribute("Sweating", true)
+	local Now = tick()
+
+	if not self.FirstTrainingTime then
+		self.FirstTrainingTime = Now
+	end
+
+	self.LastSweatTime = Now
+
+	local TimeSinceFirstTraining = Now - self.FirstTrainingTime
+
+	if TimeSinceFirstTraining >= BodyFatigueConfig.SWEAT_DELAY then
+		Character:SetAttribute("Sweating", true)
+	end
 
 	local FatiguePercent = self:GetFatiguePercent()
 	local FinalAmount = BaseAmount
@@ -100,6 +113,17 @@ function BodyFatigueController:Update(DeltaTime: number)
 		if Character:GetAttribute("Sweating") == true then
 			Character:SetAttribute("Sweating", false)
 		end
+
+		self.FirstTrainingTime = nil
+	else
+		if self.FirstTrainingTime and not Character:GetAttribute("Sweating") then
+			--local TimeSinceFirstTraining = Now - self.FirstTrainingTime
+			local TimeSinceLastGain = Now - self.LastSweatTime
+
+			if TimeSinceLastGain > BodyFatigueConfig.SWEAT_DELAY then
+				self.FirstTrainingTime = nil
+			end
+		end
 	end
 end
 
@@ -113,6 +137,7 @@ end
 
 function BodyFatigueController:ResetSweatTimer()
 	self.LastSweatTime = -math.huge
+	self.FirstTrainingTime = nil
 
 	local Character = self.Controller.Character
 	if Character then

@@ -129,7 +129,7 @@ local function SetupCharacter(Character: Model)
 			if Rounded % 0.15 == 0 then
 				BodyFatigueTextLabel.Text = tostring(Rounded) .. "%"
 				if not BodyFatigueTextLabel.TextFits then
-					BodyFatigueTextLabel.TextFits = true
+					BodyFatigueTextLabel.TextScaled = true
 				end
 			end
 		end

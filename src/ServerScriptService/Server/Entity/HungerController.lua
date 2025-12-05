@@ -11,7 +11,6 @@ local Stats = StatsModule.Stats
 export type HungerController = {
 	Controller: any,
 	LastHungerDrain: number,
-	LastMuscleLoss: number,
 	LastFatGain: number,
 	LastFatLoss: number,
 
@@ -34,7 +33,6 @@ function HungerController.new(CharacterController: any): HungerController
 	local self = setmetatable({
 		Controller = CharacterController,
 		LastHungerDrain = tick(),
-		LastMuscleLoss = tick(),
 		LastFatGain = tick(),
 		LastFatLoss = tick(),
 	}, HungerController)
@@ -70,15 +68,7 @@ function HungerController:Update()
 		self.LastHungerDrain = CurrentTime
 	end
 
-	if self:IsStarving() and CurrentTime - self.LastMuscleLoss >= HungerConfig.MUSCLE_LOSS_INTERVAL then
-		local CurrentMuscle = StateManager:GetStat(Stats.MUSCLE)
-
-		if CurrentMuscle > 0 then
-			local NewMuscle = math.max(0, CurrentMuscle - HungerConfig.MUSCLE_LOSS_RATE)
-			StateManager:SetStat(Stats.MUSCLE, NewMuscle)
-			self.LastMuscleLoss = CurrentTime
-		end
-
+	if self:IsStarving() then
 		StateManager:FireEvent(StatesModule.Events.HUNGER_CRITICAL, {})
 	end
 

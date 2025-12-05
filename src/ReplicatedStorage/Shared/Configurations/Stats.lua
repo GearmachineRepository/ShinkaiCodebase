@@ -30,6 +30,11 @@ local HARD_CAP_THRESHOLD = 35
 local POST_CAP_MULTIPLIER = 0.25
 local MAX_STARS_DISPLAYED = 5
 
+local MUSCLE_PENALTY_PER_POINT = 0.02
+local STARVATION_MUSCLE_PENALTY = 0.5
+local MUSCLE_OVERTRAIN_THRESHOLD = 200
+local STRIKING_POWER_PENALTY_PER_POINT = 0.01
+
 local TrainableStats = {
 	Stats.MAX_STAMINA,
 	Stats.DURABILITY,
@@ -60,7 +65,7 @@ local StatXPCaps = {
 local StarBonuses = {
 	[Stats.MAX_STAMINA] = 15,
 	[Stats.DURABILITY] = 10,
-	[Stats.RUN_SPEED] = 0.7,
+	[Stats.RUN_SPEED] = 0.142857,
 	[Stats.STRIKING_POWER] = 10,
 	[Stats.STRIKE_SPEED] = 10,
 	[Stats.MUSCLE] = 10,
@@ -165,6 +170,48 @@ local function GetStatValueFromStars(StatName: string, Stars: number): number
 	return Base + (BonusPerStar * Stars)
 end
 
+local function GetMusclePenaltyMultiplier(_: number, IsStarving: boolean): number
+	local Multiplier = 1.0
+
+	if IsStarving then
+		Multiplier = Multiplier * STARVATION_MUSCLE_PENALTY
+	end
+
+	return Multiplier
+end
+
+local function GetStatPenaltyFromMuscle(StatName: string, MuscleValue: number): number
+	if StatName == Stats.RUN_SPEED or StatName == Stats.STRIKE_SPEED then
+		local Penalty = 1.0 - (MuscleValue * MUSCLE_PENALTY_PER_POINT)
+		return math.max(0.1, Penalty)
+	elseif StatName == Stats.STRIKING_POWER then
+		if MuscleValue > MUSCLE_OVERTRAIN_THRESHOLD then
+			local ExcessMuscle = MuscleValue - MUSCLE_OVERTRAIN_THRESHOLD
+			local Penalty = 1.0 - (ExcessMuscle * STRIKING_POWER_PENALTY_PER_POINT)
+			return math.max(0.1, Penalty)
+		end
+		return 1.0
+	end
+
+	return 1.0
+end
+
+local function GetStatValueFromStarsWithPenalties(StatName: string, Stars: number, MuscleValue: number, IsStarving: boolean): number
+	local Base = StatBases[StatName] or 0
+	local BonusPerStar = StarBonuses[StatName] or 0
+	local StarValue = BonusPerStar * Stars
+
+	if StatName == Stats.MUSCLE then
+		local MusclePenalty = GetMusclePenaltyMultiplier(MuscleValue, IsStarving)
+		StarValue = StarValue * MusclePenalty
+	elseif StatName == Stats.RUN_SPEED or StatName == Stats.STRIKE_SPEED or StatName == Stats.STRIKING_POWER then
+		local MusclePenalty = GetStatPenaltyFromMuscle(StatName, MuscleValue)
+		StarValue = StarValue * MusclePenalty
+	end
+
+	return Base + StarValue
+end
+
 local function CalculateTotalAllocatedStars(StarsTable: {[string]: number}): number
 	local TotalStars = 0
 
@@ -184,8 +231,8 @@ local function GetDiminishingReturnsMultiplier(TotalAllocatedStars: number): num
 	return POST_CAP_MULTIPLIER
 end
 
-local function CanAllocateStatPoint(_: string, _: number, TotalAllocatedStars: number): boolean
-	if TotalAllocatedStars >= HARD_CAP_THRESHOLD then
+local function CanAllocateStatPoint(_: string, CurrentStars: number, _: number): boolean
+	if CurrentStars >= HARD_CAP_THRESHOLD then
 		return false
 	end
 
@@ -221,11 +268,18 @@ return {
 	HARD_CAP_THRESHOLD = HARD_CAP_THRESHOLD,
 	POST_CAP_MULTIPLIER = POST_CAP_MULTIPLIER,
 	MAX_STARS_DISPLAYED = MAX_STARS_DISPLAYED,
+	MUSCLE_PENALTY_PER_POINT = MUSCLE_PENALTY_PER_POINT,
+	STARVATION_MUSCLE_PENALTY = STARVATION_MUSCLE_PENALTY,
+	MUSCLE_OVERTRAIN_THRESHOLD = MUSCLE_OVERTRAIN_THRESHOLD,
+	STRIKING_POWER_PENALTY_PER_POINT = STRIKING_POWER_PENALTY_PER_POINT,
 	GetStarTierForIndex = GetStarTierForIndex,
 	GetXPThresholdForPoint = GetXPThresholdForPoint,
 	GetAvailablePointsFromXP = GetAvailablePointsFromXP,
 	GetXPProgressToNextPoint = GetXPProgressToNextPoint,
 	GetStatValueFromStars = GetStatValueFromStars,
+	GetStatValueFromStarsWithPenalties = GetStatValueFromStarsWithPenalties,
+	GetMusclePenaltyMultiplier = GetMusclePenaltyMultiplier,
+	GetStatPenaltyFromMuscle = GetStatPenaltyFromMuscle,
 	CalculateTotalAllocatedStars = CalculateTotalAllocatedStars,
 	GetDiminishingReturnsMultiplier = GetDiminishingReturnsMultiplier,
 	CanAllocateStatPoint = CanAllocateStatPoint,
