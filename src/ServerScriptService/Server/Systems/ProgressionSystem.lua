@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TrainingBalance = require(Shared.Configurations.Balance.TrainingBalance)
 local StatTypes = require(Shared.Configurations.Enums.StatTypes)
 local StatSystem = require(script.Parent.StatSystem)
+local StatBalance = require(Shared.Configurations.Balance.StatBalance)
 
 local ProgressionSystem = {}
 
@@ -20,6 +21,20 @@ function ProgressionSystem.CanTrain(PlayerData: any): (boolean, string?)
 	end
 
 	return true
+end
+
+function ProgressionSystem.GetAvailablePointsFromXP(StatName: string, XPValue: number, AllocatedStars: number): number
+	local XPCap = StatBalance.XPCaps[StatName]
+	if not XPCap then
+		return 0
+	end
+
+	local BaseXPPerPoint = XPCap / 400
+	warn(XPValue, XPValue/BaseXPPerPoint)
+	local TotalPointsEarned = math.floor(XPValue / BaseXPPerPoint)
+	local AvailablePoints = TotalPointsEarned - AllocatedStars
+
+	return math.max(0, AvailablePoints)
 end
 
 function ProgressionSystem.AwardTrainingXP(

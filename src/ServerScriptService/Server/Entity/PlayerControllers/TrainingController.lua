@@ -94,7 +94,7 @@ function TrainingController:UpdateAvailablePoints(StatName: string)
 	local XPValue = self.PlayerData.Stats[StatName .. "_XP"] or 0
 	local AllocatedStars = self.PlayerData.Stats[StatName .. "_Stars"] or 0
 
-	local AvailablePoints = ProgressionSystem.CalculateAvailablePoints(StatName, XPValue, AllocatedStars)
+	local AvailablePoints = ProgressionSystem.GetAvailablePointsFromXP(StatName, XPValue, AllocatedStars)
 
 	self.PlayerData.Stats[StatName .. "_AvailablePoints"] = AvailablePoints
 	Character:SetAttribute(StatName .. "_AvailablePoints", AvailablePoints)

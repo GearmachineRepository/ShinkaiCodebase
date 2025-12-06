@@ -19,15 +19,15 @@ local StatBalance = {
 		Fat = 0,
 		Muscle = 0,
 		Durability = 0,
-		RunSpeed = 0,
+		RunSpeed = 28,
 		StrikingPower = 0,
 		StrikeSpeed = 0,
 	},
 
 	Caps = {
-		SOFT_CAP_STARS = 20,
-		PER_STAT_MAX_STARS = 5,
-		POINTS_PER_STAR = 5,
+		SOFT_CAP_STARS = 35 * 6,  -- 6 stats total
+		PER_STAT_MAX_STARS = 35,
+		POINTS_PER_STAR = 1,
 	},
 
 	StarBonuses = {
