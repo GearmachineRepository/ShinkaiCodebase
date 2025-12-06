@@ -91,29 +91,27 @@ local function UpdateStatStars(BaseStatName: string)
 		return
 	end
 
-	local StarsContainer = StatFrame:FindFirstChild("Stars")
-	if not StarsContainer then
+	local Stars1 = StatFrame:FindFirstChild("Stars1")
+	if not Stars1 then
 		return
 	end
 
-	local TotalRows = math.ceil(AllocatedStars / MAX_STARS_PER_ROW)
-	local CurrentStarIndex = 1
+	for Index = 1, MAX_STARS_PER_ROW do
+		local Star = Stars1:FindFirstChild(tostring(Index))
+		if Star and Star:IsA("ImageLabel") then
+			local HighestTierForPosition = -1
 
-	for RowIndex = 1, TotalRows do
-		local RowFrame = StarsContainer:FindFirstChild("Row" .. RowIndex)
-		if not RowFrame then
-			break
-		end
+			local CheckStar = Index - 1
+			while CheckStar < AllocatedStars do
+				HighestTierForPosition = CheckStar
+				CheckStar += MAX_STARS_PER_ROW
+			end
 
-		for StarIndex = 1, MAX_STARS_PER_ROW do
-			local Star = RowFrame:FindFirstChild("Star" .. StarIndex)
-			if Star and Star:IsA("ImageLabel") then
-				if CurrentStarIndex <= AllocatedStars then
-					Star.ImageColor3 = Color3.new(1, 1, 1)
-				else
-					Star.ImageColor3 = DIM_COLOR
-				end
-				CurrentStarIndex += 1
+			if HighestTierForPosition >= 0 then
+				local StarTier = StatUtils.GetStarTier(HighestTierForPosition)
+				Star.ImageColor3 = StarTier.Color
+			else
+				Star.ImageColor3 = DIM_COLOR
 			end
 		end
 	end
