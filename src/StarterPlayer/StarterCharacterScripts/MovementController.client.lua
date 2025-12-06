@@ -5,8 +5,8 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = Shared:WaitForChild("Configurations")
-local StatsModule = require(Config:WaitForChild("Stats"))
-local Stats = StatsModule.Stats
+local StatsModule = require(Config.Balance.StatBalance)
+local StatEnums = require(Config.Enums.StatTypes)
 
 local Player = Players.LocalPlayer
 local Character = script.Parent
@@ -15,7 +15,7 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local Packets = require(ReplicatedStorage.Shared.Networking.Packets)
 
 local DOUBLE_TAP_TIME = 0.3
-local SPRINT_SPEED = StatsModule.GetStatBase(Stats.RUN_SPEED)
+local SPRINT_SPEED = StatsModule.Defaults.RunSpeed
 local JOG_SPEED = SPRINT_SPEED / 1.75
 local WALK_SPEED = JOG_SPEED / 2
 
@@ -38,7 +38,7 @@ else
 end
 
 local function GetSprintSpeed(): number
-	return Character:GetAttribute(Stats.RUN_SPEED) or SPRINT_SPEED
+	return Character:GetAttribute(StatEnums.RUN_SPEED) or SPRINT_SPEED
 end
 
 local function GetJogSpeed(): number
@@ -201,7 +201,7 @@ Character:GetAttributeChangedSignal("MovementMode"):Connect(function()
 	end
 end)
 
-Character:GetAttributeChangedSignal(Stats.RUN_SPEED):Connect(function()
+Character:GetAttributeChangedSignal(StatEnums.RUN_SPEED):Connect(function()
 	local CurrentMode = Character:GetAttribute("MovementMode")
 	if CurrentMode == "run" then
 		Humanoid.WalkSpeed = GetSprintSpeed()

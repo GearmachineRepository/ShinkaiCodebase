@@ -1,9 +1,9 @@
 --!strict
 local Players = game:GetService("Players")
-local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Server = ServerScriptService:WaitForChild("Server")
-local PlayerDataTemplate = require(Server.PlayerDataTemplate)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local PlayerDataTemplate = require(Shared.Configurations.Data.PlayerDataTemplate)
 
 local AUTOSAVE_INTERVAL = 60 -- 1 minute
 

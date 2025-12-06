@@ -4,7 +4,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Server = ServerScriptService:WaitForChild("Server")
 
-local CharacterController = require(Server.Entity.CharacterController)
+local CharacterController = require(Server.Entity.Core.CharacterController)
 
 return {
 	Description = "Give yourself a food item to test hunger",

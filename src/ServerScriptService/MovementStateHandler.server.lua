@@ -1,12 +1,12 @@
 --!strict
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Server = ServerScriptService:WaitForChild("Server")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local CharacterController = require(Server.Entity.CharacterController)
-local StutterStepHandler = require(Server.Entity.StutterStepHandler)
+local CharacterController = require(Server.Entity.Core.CharacterController)
 local Packets = require(Shared.Networking.Packets)
 
 Packets.MovementStateChanged.OnServerEvent:Connect(function(Player: Player, MovementMode: string)
@@ -28,14 +28,12 @@ Packets.MovementStateChanged.OnServerEvent:Connect(function(Player: Player, Move
 	if MovementMode == "jog" then
 		if Controller.StaminaController:CanJog() then
 			Character:SetAttribute("MovementMode", "jog")
-			StutterStepHandler.OnSprintStart(Player)
 		else
 			Character:SetAttribute("MovementMode", "walk")
 		end
 	elseif MovementMode == "run" then
 		if Controller.StaminaController:CanSprint() then
 			Character:SetAttribute("MovementMode", "run")
-			StutterStepHandler.OnSprintStart(Player)
 		else
 			Character:SetAttribute("MovementMode", "walk")
 		end

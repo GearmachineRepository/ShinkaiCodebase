@@ -1,10 +1,15 @@
 --!strict
-local Players = game:GetService("Players")
 
-local Server = script.Parent:WaitForChild("Server")
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Server = ServerScriptService:WaitForChild("Server")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
 local CharacterLoader = require(Server.Entity.CharacterLoader)
-local PlayerDataTemplate = require(Server.PlayerDataTemplate)
-local CharacterController = require(Server.Entity.CharacterController)
+local CharacterController = require(Server.Entity.Core.CharacterController)
+local PlayerDataTemplate = require(Shared.Configurations.Data.PlayerDataTemplate)
 local DataModule = require(Server.DataModule)
 
 Players.PlayerAdded:Connect(function(Player: Player)
@@ -24,5 +29,3 @@ Players.PlayerRemoving:Connect(function(Player)
 		end
 	end
 end)
-
---CharacterLoader.LoadNPC(workspace:WaitForChild("Rig"))

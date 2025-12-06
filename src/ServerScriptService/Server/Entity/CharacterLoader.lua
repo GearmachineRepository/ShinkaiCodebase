@@ -1,13 +1,12 @@
 --!strict
+
 local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Server = ServerScriptService:WaitForChild("Server")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local EntityModules = Server.Entity
 
-local PassiveRegistry = require(EntityModules.PassiveRegistry)
-local CharacterController = require(EntityModules.CharacterController)
+local CharacterController = require(Server.Entity.Core.CharacterController)
 local Promise = require(Shared.Packages.Promise)
 local Maid = require(Shared.General.Maid)
 
@@ -59,7 +58,7 @@ local function CloneStarterScripts(Character: Model)
 	end
 end
 
-function CharacterLoader.SpawnCharacter(Player: Player, Data)
+function CharacterLoader.SpawnCharacter(Player: Player, PlayerData)
 	return Promise.new(function(Resolve, Reject)
 		local Character = CreateCustomCharacter(Player)
 		local SpawnCFrame = GetSpawnLocation()
@@ -81,18 +80,35 @@ function CharacterLoader.SpawnCharacter(Player: Player, Data)
 			return
 		end
 
-		local Controller = CharacterController.new(Character, true, Data)
+		local Controller = CharacterController.new(Character, true, PlayerData)
 
-		local Passives = PassiveRegistry.GetAll(Data.Passives)
-		for _, Passive in Passives do
-			Controller.PassiveController:AddPassive(Passive)
+		if PlayerData.Traits then
+			for _, TraitName in PlayerData.Traits do
+				local TraitData = require(Shared.Configurations.Data.TraitData)
+				local Trait = TraitData[TraitName]
+				if Trait and Trait.Hooks then
+					for _, HookName in Trait.Hooks do
+						Controller.HookController:RegisterHook(HookName)
+					end
+				end
+			end
+		end
+
+		if PlayerData.Clan then
+			local ClanData = require(Shared.Configurations.Data.ClanData)
+			local Clan = ClanData[PlayerData.Clan.ClanName]
+			if Clan and Clan.Hooks then
+				for _, HookName in Clan.Hooks do
+					Controller.HookController:RegisterHook(HookName)
+				end
+			end
 		end
 
 		print("Player spawned:", Player.Name)
 
 		Humanoid.Died:Once(function()
 			task.wait(3)
-			CharacterLoader.LoadPlayer(Player, Data)
+			CharacterLoader.LoadPlayer(Player, PlayerData)
 		end)
 
 		Resolve(Controller)
@@ -100,15 +116,13 @@ function CharacterLoader.SpawnCharacter(Player: Player, Data)
 end
 
 local function TrackEntityPromise(Entity: Player|Model, PromiseObj: typeof(Promise), MaidTable: {[any]: Maid.MaidSelf}, ActivePromisesTable: {[any]: typeof(Promise)})
-	-- Ensure Maid exists
 	local MaidObj = MaidTable[Entity]
 	if not MaidObj then
 		MaidObj = Maid.new()
 		MaidTable[Entity] = MaidObj
 
-		-- Clean up when entity leaves (player leaves or NPC removed)
-		MaidObj:GiveTask(Entity.AncestryChanged:Connect(function(_, parent)
-			if not parent then
+		MaidObj:GiveTask(Entity.AncestryChanged:Connect(function(_, Parent)
+			if not Parent then
 				MaidObj:DoCleaning()
 				MaidTable[Entity] = nil
 				ActivePromisesTable[Entity] = nil
@@ -116,16 +130,13 @@ local function TrackEntityPromise(Entity: Player|Model, PromiseObj: typeof(Promi
 		end))
 	end
 
-	-- Clean up previous tasks/promises
 	MaidObj:DoCleaning()
-
-	-- Track the new promise
 	MaidObj:GiveTask(PromiseObj)
 	ActivePromisesTable[Entity] = PromiseObj
 end
 
-function CharacterLoader.LoadPlayer(Player: Player, Data)
-	local LoadPromise = CharacterLoader.SpawnCharacter(Player, Data)
+function CharacterLoader.LoadPlayer(Player: Player, PlayerData)
+	local LoadPromise = CharacterLoader.SpawnCharacter(Player, PlayerData)
 		:andThen(function(Controller)
 			print("Character fully loaded for:", Player.Name)
 			return Controller

@@ -1,19 +1,20 @@
 --!strict
+
 local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Server = ServerScriptService:WaitForChild("Server")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local CharacterController = require(Server.Entity.CharacterController)
-local PassiveRegistry = require(Server.Entity.PassiveRegistry)
-local StatsModule = require(Shared.Configurations.Stats)
-local StatesModule = require(Shared.Configurations.States)
+local CharacterController = require(Server.Entity.Core.CharacterController)
+local HookRegistry = require(Shared.General.HookRegistry)
+local StateTypes = require(Shared.Configurations.Enums.StateTypes)
+local StatTypes = require(Shared.Configurations.Enums.StatTypes)
 
 local CommandUtil = {}
 
-CommandUtil.States = StatesModule.States
-CommandUtil.Stats = StatsModule.Stats
+CommandUtil.States = StateTypes
+CommandUtil.Stats = StatTypes
 
 function CommandUtil.GetController(Player: Player)
 	local Character = Player.Character or workspace:FindFirstChild(Player.Name)
@@ -36,8 +37,8 @@ function CommandUtil.GetCharacter(Player: Player): Model?
 	return Player.Character or workspace:FindFirstChild(Player.Name)
 end
 
-function CommandUtil.GetPassive(PassiveName: string)
-	return PassiveRegistry.Get(PassiveName)
+function CommandUtil.GetHook(HookName: string)
+	return HookRegistry.Get(HookName)
 end
 
 return CommandUtil
