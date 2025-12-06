@@ -8,6 +8,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local StatSystem = require(Server.Systems.StatSystem)
 local ProgressionSystem = require(Server.Systems.ProgressionSystem)
+local StatBalance = require(Shared.Configurations.Balance.StatBalance)
 local Maid = require(Shared.General.Maid)
 
 local TrainingController = {}
@@ -39,19 +40,20 @@ function TrainingController:StopTraining()
 	self.CurrentTraining = nil
 end
 
-function TrainingController:ProcessTraining(_: number) -- DeltaTime not used here
+function TrainingController:ProcessTraining(_: number)
 	if not self.CurrentTraining then
 		return
 	end
 end
 
-function TrainingController:GrantStatGain(StatName: string, Amount: number, _: number?) -- Custom fatigue rate not used here
+function TrainingController:GrantStatGain(StatName: string, Amount: number, _: number?)
 	if Amount <= 0 then
 		return
 	end
 
 	local IsPremium = false
-	ProgressionSystem.AwardTrainingXP(self.PlayerData, StatName, Amount, IsPremium)
+
+	ProgressionSystem.AwardTrainingXP(self.PlayerData, StatName, Amount, IsPremium, self.Controller)
 
 	self:UpdateAvailablePoints(StatName)
 
@@ -73,31 +75,30 @@ function TrainingController:AllocateStatPoint(StatName: string): boolean
 		return false
 	end
 
+	local NewStars = self.PlayerData.Stats[StatName .. "_Stars"]
+	local BaseValue = StatBalance.Defaults[StatName] or 0
+	local NewStatValue = StatSystem.CalculateStatValue(BaseValue, NewStars, StatName)
+
+	self.Controller.StatManager:SetStat(StatName, NewStatValue)
+
 	local Character = self.Controller.Character
 	if Character then
-		local NewStars = self.PlayerData.Stats[StatName .. "_Stars"]
 		Character:SetAttribute(StatName .. "_Stars", NewStars)
 
-		local StatValue = StatSystem.CalculateStatValue(0, NewStars, StatName)
-		Character:SetAttribute(StatName, StatValue)
+		self:UpdateAvailablePoints(StatName)
 	end
 
 	return true
 end
 
 function TrainingController:UpdateAvailablePoints(StatName: string)
+	StatSystem.UpdateAvailablePoints(self.PlayerData, StatName)
+
 	local Character = self.Controller.Character
-	if not Character then
-		return
+	if Character then
+		local AvailablePoints = self.PlayerData.Stats[StatName .. "_AvailablePoints"]
+		Character:SetAttribute(StatName .. "_AvailablePoints", AvailablePoints)
 	end
-
-	local XPValue = self.PlayerData.Stats[StatName .. "_XP"] or 0
-	local AllocatedStars = self.PlayerData.Stats[StatName .. "_Stars"] or 0
-
-	local AvailablePoints = ProgressionSystem.GetAvailablePointsFromXP(StatName, XPValue, AllocatedStars)
-
-	self.PlayerData.Stats[StatName .. "_AvailablePoints"] = AvailablePoints
-	Character:SetAttribute(StatName .. "_AvailablePoints", AvailablePoints)
 end
 
 function TrainingController:CanTrain(): boolean

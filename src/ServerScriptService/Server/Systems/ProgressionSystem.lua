@@ -6,7 +6,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TrainingBalance = require(Shared.Configurations.Balance.TrainingBalance)
 local StatTypes = require(Shared.Configurations.Enums.StatTypes)
 local StatSystem = require(script.Parent.StatSystem)
-local StatBalance = require(Shared.Configurations.Balance.StatBalance)
 
 local ProgressionSystem = {}
 
@@ -16,32 +15,35 @@ function ProgressionSystem.CanTrain(PlayerData: any): (boolean, string?)
 
 	local FatiguePercent = (CurrentFatigue / MaxFatigue) * 100
 
-	if FatiguePercent >= TrainingBalance.FatigueSystem.TRAINING_LOCKOUT_PERCENT then
+	if FatiguePercent >= 100 then
 		return false, "Too fatigued to train. Rest at an apothecary or hospital."
 	end
 
 	return true
 end
 
-function ProgressionSystem.GetAvailablePointsFromXP(StatName: string, XPValue: number, AllocatedStars: number): number
-	local XPCap = StatBalance.XPCaps[StatName]
-	if not XPCap then
-		return 0
+function ProgressionSystem.GetFatiguePenalty(PlayerData: any): number
+	local CurrentFatigue = PlayerData.Stats[StatTypes.BODY_FATIGUE] or 0
+	local MaxFatigue = PlayerData.Stats[StatTypes.MAX_BODY_FATIGUE] or 100
+	local FatiguePercent = (CurrentFatigue / MaxFatigue) * 100
+
+	if FatiguePercent < TrainingBalance.FatigueSystem.TRAINING_LOCKOUT_PERCENT then
+		return 1.0
 	end
 
-	local BaseXPPerPoint = XPCap / 400
-	warn(XPValue, XPValue/BaseXPPerPoint)
-	local TotalPointsEarned = math.floor(XPValue / BaseXPPerPoint)
-	local AvailablePoints = TotalPointsEarned - AllocatedStars
+	local ExcessFatigue = FatiguePercent - TrainingBalance.FatigueSystem.TRAINING_LOCKOUT_PERCENT
+	local MaxExcess = 100 - TrainingBalance.FatigueSystem.TRAINING_LOCKOUT_PERCENT
+	local PenaltyAmount = ExcessFatigue / MaxExcess
 
-	return math.max(0, AvailablePoints)
+	return math.max(0.1, 1.0 - (PenaltyAmount * 0.7))
 end
 
 function ProgressionSystem.AwardTrainingXP(
 	PlayerData: any,
 	StatType: string,
 	BaseXP: number,
-	IsPremium: boolean?
+	IsPremium: boolean?,
+	CharacterController: any?
 ): number
 	local CanTrainResult, ErrorMessage = ProgressionSystem.CanTrain(PlayerData)
 	if not CanTrainResult then
@@ -59,12 +61,20 @@ function ProgressionSystem.AwardTrainingXP(
 		XPMultiplier *= TrainingBalance.XPRates.AFTER_SOFT_CAP_MULTIPLIER
 	end
 
+	local FatiguePenalty = ProgressionSystem.GetFatiguePenalty(PlayerData)
+	XPMultiplier *= FatiguePenalty
+
 	local FinalXP = BaseXP * XPMultiplier
 
 	PlayerData.Stats[StatType .. "_XP"] = (PlayerData.Stats[StatType .. "_XP"] or 0) + FinalXP
 
 	local FatigueGain = FinalXP * TrainingBalance.FatigueSystem.XP_TO_FATIGUE_RATIO
 	PlayerData.Stats[StatTypes.BODY_FATIGUE] = (PlayerData.Stats[StatTypes.BODY_FATIGUE] or 0) + FatigueGain
+
+	if CharacterController and CharacterController.StatManager then
+		local NewFatigue = PlayerData.Stats[StatTypes.BODY_FATIGUE]
+		CharacterController.StatManager:SetStat(StatTypes.BODY_FATIGUE, NewFatigue)
+	end
 
 	StatSystem.UpdateAvailablePoints(PlayerData, StatType)
 

@@ -34,6 +34,7 @@ local TrainingBalance = {
 			ActivityName = "Running",
 			BaseXPPerSecond = 10,
 			StaminaDrain = 5,
+			NonmachineMultiplier = 0.75,
 		},
 		Durability = {
 			ActivityName = "Conditioning",
@@ -42,8 +43,9 @@ local TrainingBalance = {
 		},
 		RunSpeed = {
 			ActivityName = "Sprinting",
-			BaseXPPerSecond = 12,
+			BaseXPPerSecond = 55,
 			StaminaDrain = 7,
+			NonmachineMultiplier = 0.5,
 		},
 		StrikingPower = {
 			ActivityName = "Heavy Bag",

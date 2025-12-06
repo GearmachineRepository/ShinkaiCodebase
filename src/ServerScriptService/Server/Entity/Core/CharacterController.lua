@@ -19,6 +19,8 @@ local HungerController = require(Entity.PlayerControllers.HungerController)
 local BodyFatigueController = require(Entity.PlayerControllers.BodyFatigueController)
 local TrainingController = require(Entity.PlayerControllers.TrainingController)
 
+local TrainingBalance = require(Shared.Configurations.Balance.TrainingBalance)
+
 local StatTypes = require(Shared.Configurations.Enums.StatTypes)
 local StateTypes = require(Shared.Configurations.Enums.StateTypes)
 local Maid = require(Shared.General.Maid)
@@ -189,7 +191,7 @@ function CharacterController:HandleSprintMode()
 				self.StateManager:FireEvent("StaminaDepleted", {})
 			else
 				if self.TrainingController and self.TrainingController:CanTrain() then
-					local RunSpeedXP = 15 * DeltaTime
+					local RunSpeedXP = (TrainingBalance.TrainingTypes.RunSpeed.BaseXPPerSecond * TrainingBalance.TrainingTypes.RunSpeed.NonmachineMultiplier) * DeltaTime
 					local FatigueGain = 0.5 * 0.7
 					self.TrainingController:GrantStatGain(StatTypes.RUN_SPEED, RunSpeedXP, FatigueGain)
 				end
@@ -218,7 +220,7 @@ function CharacterController:HandleJogMode()
 				self.StateManager:FireEvent("StaminaDepleted", {})
 			else
 				if self.TrainingController and self.TrainingController:CanTrain() then
-					local StaminaXP = 0.185 * DeltaTime
+					local StaminaXP = (TrainingBalance.TrainingTypes.Stamina.BaseXPPerSecond * TrainingBalance.TrainingTypes.Stamina.NonmachineMultiplier) * DeltaTime
 					local FatigueGain = 0.5 * 0.8
 					self.TrainingController:GrantStatGain(StatTypes.MAX_STAMINA, StaminaXP, FatigueGain)
 				end

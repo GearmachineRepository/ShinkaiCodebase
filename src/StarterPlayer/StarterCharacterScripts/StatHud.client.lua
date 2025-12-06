@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local StatUtils = require(Shared.Utils.StatUtils)
+local StatBalance = require(Shared.Configurations.Balance.StatBalance)
 local Packets = require(Shared.Networking.Packets)
 
 local Player = Players.LocalPlayer
@@ -38,6 +39,7 @@ for _, Stat in StatUtils.TRAINABLE_STATS do
 	local AllocateButton = NewTemplate:FindFirstChild("Allocate")
 	local PointsLabel = NewTemplate:FindFirstChild("Points")
 	local TotalStatBuffLabel = NewTemplate:FindFirstChild("TotalBuff")
+	local ProgressLabel = NewTemplate:FindFirstChild("Progress")
 
 	if PointsLabel then
 		PointsLabel.Text = POINT_TEXT .. "0"
@@ -45,6 +47,10 @@ for _, Stat in StatUtils.TRAINABLE_STATS do
 
 	if TotalStatBuffLabel then
 		TotalStatBuffLabel.Text = BUFF_TEXT .. "0"
+	end
+
+	if ProgressLabel then
+		ProgressLabel.Text = "(0/0)"
 	end
 
 	if AllocateButton then
@@ -163,11 +169,45 @@ local function UpdateAvailablePoints(BaseStatName: string)
 	end
 end
 
+local function UpdateXPProgress(BaseStatName: string)
+	local CurrentXP = Character:GetAttribute(BaseStatName .. "_XP") or 0
+	--local CurrentStars = Character:GetAttribute(BaseStatName .. "_Stars") or 0
+
+	local StatFrame: Frame? = nil
+	for _, Frame in StatFrames do
+		if Frame.Name == BaseStatName then
+			StatFrame = Frame
+			break
+		end
+	end
+
+	if not StatFrame then
+		return
+	end
+
+	local ProgressLabel = StatFrame:FindFirstChild("Progress")
+	if not ProgressLabel or not ProgressLabel:IsA("TextLabel") then
+		return
+	end
+
+	local XPThreshold = StatBalance.XPThresholds[BaseStatName]
+	if not XPThreshold then
+		ProgressLabel.Text = "(0/0)"
+		return
+	end
+
+	local XPForNextStar = XPThreshold * StatBalance.Caps.POINTS_PER_STAR
+	local XPEarnedForCurrentStar = CurrentXP % XPForNextStar
+
+	ProgressLabel.Text = string.format("(%d/%d)", XPEarnedForCurrentStar, XPForNextStar)
+end
+
 local function UpdateAllStats()
 	for _, Stat in StatUtils.TRAINABLE_STATS do
 		UpdateStatStars(Stat)
 		UpdateStatValue(Stat)
 		UpdateAvailablePoints(Stat)
+		UpdateXPProgress(Stat)
 	end
 end
 
@@ -179,6 +219,10 @@ for _, Stat in StatUtils.TRAINABLE_STATS do
 
 	Character:GetAttributeChangedSignal(Stat .. "_AvailablePoints"):Connect(function()
 		UpdateAvailablePoints(Stat)
+	end)
+
+	Character:GetAttributeChangedSignal(Stat .. "_XP"):Connect(function()
+		UpdateXPProgress(Stat)
 	end)
 end
 
